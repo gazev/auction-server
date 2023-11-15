@@ -14,6 +14,9 @@
 #include "../utils/validators.h"
 #include "../utils/consts.h"
 
+#include "client.h"
+#include "command_table.h"
+#include "parser.h"
 /**
 Print program's help message
 */
@@ -31,13 +34,15 @@ void print_usage() {
 
 
 int main(int argc, char **argv) { 
+    log_level_t g_level = LOG_NORMAL;
+
     // arguments we want to determine 
     char *port = DEFAULT_PORT;
     char *ip   = NULL;
 
     // parse input arguments with getopt()
     int opt = 0; 
-    while ((opt = getopt(argc, argv, "hn:p:")) != -1) { 
+    while ((opt = getopt(argc, argv, "hdn:p:")) != -1) { 
         switch (opt) {
             case 'h':
                 print_usage();
@@ -49,6 +54,10 @@ int main(int argc, char **argv) {
                 } else {
                     LOG_WARN("Ignoring invalid -n argument: %s", optarg);
                 }
+                break;
+            
+            case 'd': // set debug
+                g_level = LOG_DEBUG;
                 break;
 
             case 'p':
@@ -65,34 +74,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    // if no IP is provided, we assume it's running on the local machine
-   if (!ip) {
-        struct addrinfo hints = {
-            .ai_family = AF_INET,
-            .ai_socktype = SOCK_DGRAM,
-            .ai_flags = 0,
-        };
-        struct addrinfo *addr;
-
-        int err = getaddrinfo(NULL, port, &hints, &addr);
-        if (err) {
-            if (err == EAI_SYSTEM) {
-                LOG_ERROR("getaddrinfo: %s", strerror(errno));
-            } else {
-                LOG_ERROR("getaddrinfo: %s", gai_strerror(err));
-            }
-            exit(1);
-        }
-
-        // getting the IP
-        ip = inet_ntoa(((struct sockaddr_in *)addr->ai_addr)->sin_addr);
-
-        freeaddrinfo(addr);
-    }
-    LOG("%s", ip);
-
-    // call the real func now like
-    // client(ip, port);
+    set_log_level(g_level);
+    client(ip, port);
 
     return 0;
 }

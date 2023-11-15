@@ -44,7 +44,7 @@ extern log_level_t g_level;
     } while (0);
 
 
-#define LOG_DEBUG(...)                                                            \
+#define LOG_DEBUG(...)                                                   \
     do {                                                                      \
         if (g_level == LOG_DEBUG) {                                           \
             char buf[2048];                                                   \

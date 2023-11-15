@@ -37,7 +37,7 @@ int main(int argc, char **argv) {
                 exit(0);
 
             case 'v': // set verbose
-                if (!g_level) { // don't overwrite debug option if set
+                if (!g_level) { // don't overwrite debug option if it is set
                     g_level = LOG_VERBOSE;
                 }
                 break;
@@ -54,8 +54,8 @@ int main(int argc, char **argv) {
                 }
                 break;
 
-
             default:
+                // this is an error
                 print_usage();
                 exit(1);
         }
@@ -63,5 +63,6 @@ int main(int argc, char **argv) {
 
     set_log_level(g_level);
 
+    // call server(port) here
     return 0;
 }
