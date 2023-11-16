@@ -1,7 +1,7 @@
 #ifndef __PARSER_H__
 #define __PARSER_H__
 
-#define MAX_COMMAND_SIZE 1024
+#define MAX_COMMAND_SIZE 1025 
 
 struct arg {
     char *value;
@@ -9,12 +9,11 @@ struct arg {
 };
 
 struct command {
-    char *op; // command operation (e.g "login", "logout", etc)
-    struct arg *args; // command arguments (e.g "uuid" -> "password")
+    char *op;
+    struct arg *args;
 };
 
-
 struct command *parse_command(char *command);
-void free_command(struct command *cmd);
+void free_command(struct command *);
 
 #endif

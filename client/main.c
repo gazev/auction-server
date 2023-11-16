@@ -49,12 +49,10 @@ int main(int argc, char **argv) {
                 exit(0);
 
             case 'n':
-                if (is_valid_ip_addr(optarg)) {
-                    ip = optarg;
-                } else {
-                    LOG_WARN("Ignoring invalid -n argument: %s", optarg);
+                if (!is_valid_ip_addr(optarg)) {
+                    LOG_WARN("Invalid IP literal (contiuing assuming IP is a domain): %s", optarg);
                 }
-                break;
+                ip = optarg;
             
             case 'd': // set debug
                 g_level = LOG_DEBUG;
@@ -75,7 +73,7 @@ int main(int argc, char **argv) {
     }
 
     set_log_level(g_level);
-    client(ip, port);
+    run_client(ip, port);
 
     return 0;
 }
