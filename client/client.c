@@ -85,7 +85,6 @@ void run_client(char *ip, char *port) {
 
         // warn user if input is too large and clean stdin unread buffer
         if (input[endl_idx] != '\n') {
-            printf("%d", endl_idx);
             LOG_WARN("too large input, truncating");
             clean_stdin_buffer();
         }
