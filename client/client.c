@@ -34,49 +34,48 @@ int handle_cmd(struct command *cmd, struct client_state *client) {
 /**
 Still needs to be discussed
 */
-// int initialize_client(char *ip, char *port, struct client_state *client) {
-//     client->logged_in = 0;
+int initialize_client(char *ip, char *port, struct client_state *client) {
+    int sock_fd;
+    struct addrinfo hints, *req;
 
-//     struct addrinfo hints, *req;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = 0;
 
-//     memset(&hints, 0, sizeof(hints));
-//     hints.ai_family = AF_INET;
-//     hints.ai_socktype = SOCK_DGRAM;
-//     hints.ai_flags = 0;
+    int err = getaddrinfo(ip, port, &hints, &req);
+    if (err) {
+        if (err == EAI_SYSTEM) {
+            LOG_ERROR("getaddrinfo: %s", strerror(errno));
+        } else {
+            LOG_ERROR("getadddrinfo: %s", gai_strerror(err));
+        }
+        return 1;
+    }
 
-//     int err = getaddrinfo(ip, port, &hints, &req);
-//     if (err) {
-//         if (err == EAI_SYSTEM) {
-//             LOG_ERROR("getaddrinfo: %s", strerror(errno));
-//         } else {
-//             LOG_ERROR("getadddrinfo: %s", gai_strerror(err));
-//         }
-//         return 1;
-//     }
+    if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        LOG_ERROR("socket: %s", strerror(errno));
+        return 1;
+    }
 
-//     int announce_fd = socket(AF_INET, SOCK_DGRAM, 0);
-//     if (announce_fd == -1) {
-//         LOG_ERROR("socket: %s", strerror(errno));
-//         return 1;
-//     }
+    client->logged_in = 0;
+    client->annouce_socket = sock_fd;
+    // copy address information 
+    client->as_addr_len = req->ai_addrlen;
+    memcpy(&client->as_addr, req->ai_addr, sizeof(*req->ai_addr));
 
-//     client->annouce_socket = announce_fd;
-//     client->as_addr_len = req->ai_addrlen;
-//     memcpy(&client->as_addr.sa_data, req->ai_addr->sa_data, 14);
-//     client->as_addr.sa_family = req->ai_addr->sa_family;
-
-//     return 0;
-// }
+    return 0;
+}
 
 // int send_message(char *message, )
 
 void run_client(char *ip, char *port) {
     struct client_state client;
 
-    // if (initialize_client(ip, port, &client)) {
-    //     LOG_ERROR("Failed initializing client connection");
-    //     exit(1);
-    // }
+    if (initialize_client(ip, port, &client)) {
+        LOG_ERROR("Failed initializing client connection");
+        exit(1);
+    }
 
     char input[MAX_COMMAND_SIZE];
     while (fgets(input, sizeof(input), stdin)) {
