@@ -62,9 +62,16 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
     client->annouce_socket = sock_fd;
     // copy address information 
     client->as_addr_len = req->ai_addrlen;
-    memcpy(&client->as_addr, req->ai_addr, sizeof(*req->ai_addr));
+    client->as_addr = malloc(sizeof(struct sockaddr));
+    memcpy(client->as_addr, req->ai_addr, sizeof(*req->ai_addr));
+
+    free(req);
 
     return 0;
+}
+
+void free_client(struct client_state *client) {
+    free(client->as_addr);
 }
 
 // int send_message(char *message, )
