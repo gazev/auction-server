@@ -52,6 +52,9 @@ int serve_udp_command(char *request, struct udp_client *client, char *response, 
     // if the syntax of the request was incorrect or values were missing
     int err = fn(request, client, response, response_len);
     if (err) {
+        char *error_msg = get_udp_error_msg(err);
+
+        *response_len = strlen(error_msg);
         sprintf(response, "%s", get_udp_error_msg(err));
     }
 
@@ -91,6 +94,9 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
     }
 
     LOG_VERBOSE("Handling login request for %s on %s", uid, client->ipv4);
+
+    sprintf(response, "Hello fucker\n");
+    *response_len = 13;
 
     return 0;
 }

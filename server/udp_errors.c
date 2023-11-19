@@ -2,7 +2,6 @@
 
 // lookup table for strings that represent error codes returned from udp handler funcs
 // each error message is indexed by it's errcode, check udp_errors.h to understand better
-const
 static
 char *errors_table[] = {
     "", // return code 0 is not an error
@@ -22,7 +21,7 @@ const
 static
 char error_table_entries = sizeof(errors_table) / sizeof (char *);
 
-const char *get_udp_error_msg(int errcode) {
+char *get_udp_error_msg(int errcode) {
     if (errcode < 0 || errcode >= error_table_entries)
         return NULL;
 

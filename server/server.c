@@ -96,6 +96,7 @@ void *serve_udp_connections(void *arg) {
         }
 
         // command was processed, send the response
+        LOG_DEBUG("%s", send_buffer);
         if (sendto(fd, send_buffer, response_size, 0, (struct sockaddr *)udp_client.addr, udp_client.addr_len) < 0) {
             LOG_ERROR("sendto: %s", strerror(errno))
             LOG_DEBUG("failed responding to client...");
