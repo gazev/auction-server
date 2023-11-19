@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 
 #include "../utils/logging.h"
+#include "../utils/validators.h"
 #include "server.h"
 #include "udp.h"
 
@@ -42,6 +43,28 @@ int serve_udp_command(char *input, struct udp_client *client) {
 
 int handle_login(char *input, struct udp_client *client) {
     LOG_DEBUG("entered handle_login");
+    char *uid = strtok(NULL, " ");
+
+    if (uid == NULL) {
+        LOG("no UID supplied");
+    }
+
+    if (!is_valid_uid(uid)) {
+        LOG("invalid IP");
+    }
+
+    char *passwd = strtok(NULL, " ");
+
+    if (passwd == NULL) {
+        LOG("no password supplied")
+    }
+
+    if (!is_valid_passwd(passwd)) {
+        LOG("invalid passwd");
+    }
+
+    LOG("UID: %s, pass: %s", uid, passwd);
+
     return 0;
 }
 
