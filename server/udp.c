@@ -7,14 +7,24 @@
 
 #include "../utils/logging.h"
 #include "../utils/validators.h"
+
 #include "server.h"
+#include "udp_command_table.h"
+#include "udp_errors.h"
+
 #include "udp.h"
 
-#include "udp_command_table.h"
-
-int serve_udp_command(char *input, struct udp_client *client) {
+/**
+* Hanle a UDP protocol command.
+* Returns 0 if command was sucessfully instructed by the program and -1 if the
+* command wasn't recognized.
+* 
+* If 0 is returned, the server response shall be written to response and the response_len
+* shall be set to indicate the response's size
+*/
+int serve_udp_command(char *request, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered serve_udp_command");
-    char *cmd = strtok(input, " ");
+    char *cmd = strtok(request, " ");
 
     if (cmd == NULL) {
         LOG_DEBUG("received no command");
@@ -37,64 +47,86 @@ int serve_udp_command(char *input, struct udp_client *client) {
         return -1;
     }
 
-    fn(input, client);
+    LOG_VERBOSE("Handling %s request for %s", cmd, client->ipv4);
+
+    // if the syntax of the request was incorrect or values were missing
+    int err = fn(request, client, response, response_len);
+    if (err) {
+        char *error_msg = get_udp_error_msg(err);
+
+        *response_len = strlen(error_msg);
+        sprintf(response, "%s", get_udp_error_msg(err));
+    }
+
     return 0;
 }
 
 
-int handle_login(char *input, struct udp_client *client) {
+/**
+* Performs a login request.
+* If an error occures the corresponding error value is returned. If successful
+* 0 is returned
+**/
+int handle_login(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_login");
     char *uid = strtok(NULL, " ");
 
     if (uid == NULL) {
-        LOG("no UID supplied");
+        LOG_DEBUG("no UID supplied");
+        return LOGIN_ERROR_BAD_VALUES;
     }
 
     if (!is_valid_uid(uid)) {
-        LOG("invalid IP");
+        LOG_DEBUG("invalid UID");
+        return LOGIN_ERROR_BAD_VALUES;
     }
 
     char *passwd = strtok(NULL, " ");
 
     if (passwd == NULL) {
-        LOG("no password supplied")
+        LOG_DEBUG("no password supplied")
+        return LOGIN_ERROR_BAD_VALUES;
     }
 
     if (!is_valid_passwd(passwd)) {
-        LOG("invalid passwd");
+        LOG_DEBUG("invalid passwd");
+        return LOGIN_ERROR_BAD_VALUES;
     }
 
-    LOG("UID: %s, pass: %s", uid, passwd);
+    LOG_VERBOSE("Handling login request for %s on %s", uid, client->ipv4);
+
+    sprintf(response, "Hello fucker\n");
+    *response_len = 13;
 
     return 0;
 }
 
-int handle_logout(char *input, struct udp_client *client) {
+int handle_logout(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_logout");
     return 0;
 }
 
-int handle_unregister(char *input, struct udp_client *client) {
+int handle_unregister(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_unregister");
     return 0;
 }
 
-int handle_exit(char *input, struct udp_client *client) {
+int handle_exit(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_exit");
     return 0;
 }
 
-int handle_open(char *input, struct udp_client *client) {
+int handle_open(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_open");
     return 0;
 }
 
-int handle_close(char *input, struct udp_client *client) {
+int handle_close(char *input, struct udp_client *client, char *response, size_t *respnose_len) {
     LOG_DEBUG("entered handle_close");
     return 0;
 }
 
-int handle_my_auctions(char *input, struct udp_client *client) {
+int handle_my_auctions(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered");
     return 0;
 }

@@ -4,7 +4,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
-#define UDP_BUFFER_SIZE 20 
+#define UDP_DATAGRAM_SIZE 65535
 
 struct udp_client {
     char ipv4[INET_ADDRSTRLEN];

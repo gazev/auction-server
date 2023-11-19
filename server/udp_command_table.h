@@ -4,9 +4,9 @@
 #include "server.h"
 #include "udp.h"
 
-typedef int (*udp_handler_fn)(char *cmd, struct udp_client *client);
+typedef int (*udp_handler_fn)(char *req, struct udp_client *client, char *resp, size_t *resp_len);
 
 udp_handler_fn get_udp_handler_func(char *cmd);
-char *get_error_msg(int errcode);
+char *get_udp_error_msg(int errcode);
 
 #endif 
