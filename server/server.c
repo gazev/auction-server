@@ -19,7 +19,7 @@
 
 
 /**
-Main UDP socket serving loop
+* Main UDP socket serving loop
 */
 void *serve_udp_connections(void *arg) {
     LOG_DEBUG("entered serve_udp_connections");
@@ -31,8 +31,8 @@ void *serve_udp_connections(void *arg) {
 
     // initialize UDP socket
     if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        LOG_DEBUG("failed")
         LOG_ERROR("socket: %s", strerror(errno));
+        LOG_DEBUG("failed initializing UDP socket, fatal...");
         exit(1);
     }
 
@@ -42,8 +42,8 @@ void *serve_udp_connections(void *arg) {
     server_addr.sin_addr.s_addr = INADDR_ANY; // bind to all interfaces
 
     if ((bind(fd, (struct sockaddr *)&server_addr, sizeof(server_addr))) != 0) {
-        LOG_DEBUG("failed binding UDP socket");
         LOG_ERROR("bind: %s", strerror(errno));
+        LOG_DEBUG("failed binding UDP socket, fatal...");
         exit(1);
     }
 
@@ -52,18 +52,21 @@ void *serve_udp_connections(void *arg) {
     /**
     Main loop for UDP socket
     */
-    char buffer[UDP_BUFFER_SIZE];
-    char client_ipv4[INET_ADDRSTRLEN];
     struct udp_client udp_client;
+    char client_ipv4[INET_ADDRSTRLEN];
+
+    char recv_buffer[UDP_DATAGRAM_SIZE];
+    char send_buffer[UDP_DATAGRAM_SIZE];
+    size_t response_size;
     while (1) {
         memset(&udp_client, 0, sizeof(struct udp_client));
 
         LOG_DEBUG("blocking on recvfrom");
-        int read = recvfrom(fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&client_addr, &client_addr_size);
+        int read = recvfrom(fd, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr*)&client_addr, &client_addr_size);
         LOG_DEBUG("unblocked on recvfrom");
         if (read < 0) {
-            LOG_DEBUG("failed")
             LOG_ERROR("recvfrom: %s", strerror(errno));
+            LOG_DEBUG("failed reading from UDP socket, fatal...");
             exit(1);
         }
 
@@ -76,22 +79,27 @@ void *serve_udp_connections(void *arg) {
         udp_client.addr_len = client_addr_size; 
 
         // if no '\n' in input, then it is wrong
-        int endl_idx = strcspn(buffer, "\n");
-        if (endl_idx == UDP_BUFFER_SIZE) {
-            LOG_VERBOSE("%s - sent too large datagram, ignoring request", udp_client.ipv4);
+        int endl_idx = strcspn(recv_buffer, "\n");
+        if (endl_idx == UDP_DATAGRAM_SIZE) {
+            LOG_VERBOSE("%s - sent too large message, ignoring request", udp_client.ipv4);
             continue;
         }
 
-        buffer[endl_idx] = '\0';
+        recv_buffer[endl_idx] = '\0';
 
         LOG_DEBUG("serving %s", udp_client.ipv4);
-        int err = serve_udp_command(buffer, &udp_client);
+        int err = serve_udp_command(recv_buffer, &udp_client, send_buffer, &response_size);
+        // we couldn't understand the command
         if (err) {
-            if (sendto(fd, "ERR\n", 4, 0, (struct sockaddr *)udp_client.addr, udp_client.addr_len) < 0) {
-                LOG_DEBUG("failed responding with ERR to client");
-                LOG_ERROR("sendto: %s", strerror(errno))
-                exit(1);
-            }
+            strcpy(send_buffer, "ERR\n");
+            response_size = 4;
+        }
+
+        // command was processed, send the response
+        LOG_DEBUG("%s", send_buffer);
+        if (sendto(fd, send_buffer, response_size, 0, (struct sockaddr *)udp_client.addr, udp_client.addr_len) < 0) {
+            LOG_ERROR("sendto: %s", strerror(errno))
+            LOG_DEBUG("failed responding to client...");
         }
     }
 }
