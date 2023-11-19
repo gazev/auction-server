@@ -89,15 +89,8 @@ int handle_login (struct arg *args, struct client_state *client) {
     //Create protocol message format: LIN UID password
     char message[MAX_LOGIN_COMMAND];
     snprintf(message, MAX_LOGIN_COMMAND, "LIN %s %s\n", uid, passwd); 
-<<<<<<< HEAD
-    size_t n_msg_bytes = strlen(message);
-    LOG_DEBUG("blocking on send_request");
-    if (send_request(message, n_msg_bytes, client)!=0)
-=======
-
     //comunicate with server
     if (send_udp_request(message, MAX_LOGIN_COMMAND, client)!=0)
->>>>>>> origin/master
         return ERROR_LOGIN;
     char buffer[MAX_LOGIN_RESPONSE];
     if (receive_udp_response(buffer, MAX_LOGIN_RESPONSE, client)!=0)
