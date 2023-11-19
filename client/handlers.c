@@ -8,6 +8,7 @@
 #include "client.h"
 #include "parser.h"
 #include "../utils/logging.h"
+#include "../utils/validators.h"
 
 int send_request(char *message, size_t n_msg_bytes, struct client_state *client) {
     size_t n = sendto(client->annouce_socket, message, n_msg_bytes, 0, client->as_addr, client->as_addr_len);
@@ -58,14 +59,20 @@ int handle_login (struct arg *args, struct client_state *client) {
         LOG_ERROR("got NULL uid");
         return ERROR_LOGIN;
     }
+    if (!is_valid_uid(uid)) {
+        LOG_ERROR("got invalid uid");
+        return ERROR_LOGIN;
+    }
 
     char *passwd = args->next_arg->value;
     if (passwd == NULL) {
         LOG_ERROR("got NULL password");
         return ERROR_LOGIN;
     }
-    
-    //TODO check uid and password format
+    if (!is_valid_passwd(passwd)){
+        LOG_ERROR("got invalid password");
+        return ERROR_LOGIN;
+    }
 
     //Create protocol message format: LIN UID password
     char message[MAX_LOGIN_COMMAND];
