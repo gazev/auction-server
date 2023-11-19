@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 #include "../utils/logging.h"
 #include "client.h"
@@ -70,7 +71,8 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
     return 0;
 }
 
-void free_client_state(struct client_state *client) {
+void free_client(struct client_state *client) {
+    close(client->annouce_socket);
     free(client->as_addr);
 }
 

@@ -3,10 +3,13 @@
 
 #include <netinet/in.h>
 
+#define UID_SIZE 7
+#define PASSWORD_SIZE 8
+
 struct client_state {
     int logged_in;      // 1 or 0
-    char uid[6];        // an IST number
-    char passwd[8];     // alphanumeric string
+    char uid[UID_SIZE];        // an IST number
+    char passwd[PASSWORD_SIZE];     // alphanumeric string
     int annouce_socket; // UDP socket
     struct sockaddr *as_addr; // AS server socket address
     socklen_t as_addr_len;   // AS server sockaddr length
