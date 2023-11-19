@@ -4,7 +4,7 @@
 #include "parser.h"
 #include "client.h"
 
-typedef int (*handler_func)(struct arg *, struct client_state *);
+typedef int (*handler_func)(struct arg *, struct client_state *, char *);
 
 handler_func get_handler_func(char *cmd_op);
 char *get_error_msg(int errcode);

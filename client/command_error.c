@@ -17,7 +17,13 @@ static
 struct error_mappings error_lookup_table[] = {
     {ERROR_LOGIN, "Failed login"},
     {ERROR_LOGOUT, "Failed logout"},
-    // put other errors here if necessary
+    {ERROR_MYLIST, "?"},
+    {ERROR_NULL_ARGS, "Missing arguments"},
+    {ERROR_NULL_UID, "Please provide UID"},
+    {ERROR_NULL_PASSWD, "Please provide Password"},
+    {ERROR_INVALID_UID, "The UID must be a numeric of size 6"},
+    {ERROR_INVALID_PASSWD, "The Password must be an alphanumeric of size 8"},
+    {ERROR_UNKNOWN_ANSWER, "Got an unknown response message from the server"}
 };
 
 const 

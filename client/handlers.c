@@ -8,6 +8,7 @@
 #include "../utils/validators.h"
 #include "../utils/config.h"
 
+#include "command_error.h"
 #include "handlers.h"
 #include "client.h"
 #include "parser.h"
@@ -50,45 +51,37 @@ int receive_udp_response(char *buffer, size_t response_size, struct client_state
 
 /*--------------------------------- LOGIN ------------------------------------------------------------------*/
 
-int handle_login (struct arg *args, struct client_state *client) {
+int handle_login (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("entered handle_login")
 
     if (client->logged_in) {
         LOG_DEBUG("client->logged_in = 1")
-        LOG("already logged in");
+        REPLY(response, "already logged in");
         return 0;
     }
 
     // this might not be needed because args is always initialized, even if its value is NULL
     if (args == NULL) {
         LOG_DEBUG("NULL first arg")
-        LOG_ERROR("got NULL args struct");
-        return ERROR_LOGIN;
+        return ERROR_NULL_ARGS;
     }
 
     char *uid = args->value;
-    if (uid == NULL) {
-        LOG_ERROR("got NULL uid");
-        return ERROR_LOGIN;
-    }
-    if (!is_valid_uid(uid)) {
-        LOG_ERROR("got invalid uid");
-        return ERROR_LOGIN;
-    }
+    if (uid == NULL)
+        return ERROR_NULL_UID;
+    if (!is_valid_uid(uid))
+        return ERROR_INVALID_UID;
 
     char *passwd = args->next_arg->value;
-    if (passwd == NULL) {
-        LOG_ERROR("got NULL password");
-        return ERROR_LOGIN;
-    }
-    if (!is_valid_passwd(passwd)){
-        LOG_ERROR("got invalid password");
-        return ERROR_LOGIN;
-    }
+    if (passwd == NULL)
+        return ERROR_NULL_PASSWD;
+    if (!is_valid_passwd(passwd))
+        return ERROR_INVALID_PASSWD;
 
     //Create protocol message format: LIN UID password
     char message[MAX_LOGIN_COMMAND];
-    snprintf(message, MAX_LOGIN_COMMAND, "LIN %s %s\n", uid, passwd); 
+    snprintf(message, MAX_LOGIN_COMMAND, "LIN %s %s\n", uid, passwd);
+
     //comunicate with server
     if (send_udp_request(message, MAX_LOGIN_COMMAND, client)!=0)
         return ERROR_LOGIN;
@@ -99,29 +92,28 @@ int handle_login (struct arg *args, struct client_state *client) {
     //check result
     if (!strcmp(buffer, SUCESSFULL_LOGIN)){
         client->logged_in = 1;
-        LOG("sucessfull login");
+        REPLY(response, "sucessfull login");
         return 0;
     }
     if (!strcmp(buffer, UNSUCESSFULL_LOGIN)){
-        LOG("incorrect login attempt");
+        REPLY(response, "incorrect login attempt");
         return 0;
     }
     if (!strcmp(buffer, SUCESSFULL_REGISTER)){
         memcpy(client->uid, uid, UID_SIZE);
         memcpy(client->passwd, passwd, PASSWORD_SIZE);
         client->logged_in = 1;
-        LOG("new user registered");
+        REPLY(response, "new user registered");
         return 0;
     }
-    LOG("unknown login answer");
-    return ERROR_LOGIN;
+    return ERROR_UNKNOWN_ANSWER;
 }
 
 /*--------------------------------- LOGOUT ------------------------------------------------------------------*/
 
-int handle_logout (struct arg *args, struct client_state *client) {
+int handle_logout (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     if (!client->logged_in) {
-        LOG("already logged out");
+        REPLY(response, "already logged out");
         return 0;
     }
 
@@ -139,69 +131,68 @@ int handle_logout (struct arg *args, struct client_state *client) {
     //check result
     if (!strcmp(buffer, SUCESSFULL_LOGOUT)){
         client->logged_in = 0;
-        LOG("sucessfull logout");
+        REPLY(response, "sucessfull logout");
         return 0;
     }
     if (!strcmp(buffer, UNSUCESSFULL_LOGOUT)){
-        LOG("user not logged in");
+        REPLY(response, "user not logged in");
         return 0;
     }
     if (!strcmp(buffer, UNREGISTERED_LOGOUT)){
-        LOG("unknown user");
+        REPLY(response, "unknown user");
         return 0;
     }
-    LOG("unknown logout answer");
-    return ERROR_LOGOUT;
+    return ERROR_UNKNOWN_ANSWER;
 }
 
 
 //TODO-----------------------------------------------------------------------------------------------
-int handle_unregister (struct arg *args, struct client_state *client) {
+int handle_unregister (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_exit (struct arg *args, struct client_state *client) {
+int handle_exit (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_open (struct arg *args, struct client_state *client) {
+int handle_open (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_close (struct arg *args, struct client_state *client) {
+int handle_close (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_my_auctions (struct arg *args, struct client_state *client) {
+int handle_my_auctions (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_my_bids (struct arg *args, struct client_state *client) {
+int handle_my_bids (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_list (struct arg *args, struct client_state *client) {
+int handle_list (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_show_asset (struct arg *args, struct client_state *client) {
+int handle_show_asset (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_bid (struct arg *args, struct client_state *client) {
+int handle_bid (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
-int handle_show_record (struct arg *args, struct client_state *client) {
+int handle_show_record (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }

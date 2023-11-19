@@ -5,6 +5,16 @@
 
 #include "../utils/config.h"
 
+/**
+ * Display client-related info in stdout
+*/
+#define DISPLAY_CLIENT(...)                                                              \
+    do {                                                                      \
+        char buf[65535];                                                       \
+        snprintf(buf, 65535, __VA_ARGS__);                                     \
+        fprintf(stdout, "%s\n", buf);                                \
+    } while (0);
+
 struct client_state {
     int logged_in;      // 1 or 0
     char uid[UID_SIZE];        // an IST number

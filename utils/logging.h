@@ -14,7 +14,7 @@ extern log_level_t g_level;
     do {                                                                      \
         char buf[2048];                                                       \
         snprintf(buf, 2048, __VA_ARGS__);                                     \
-        fprintf(stderr, "[LOG]: %s\n", buf);                                \
+        fprintf(stdout, "[LOG]: %s\n", buf);                                \
     } while (0);
 
 

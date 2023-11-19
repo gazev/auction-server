@@ -18,7 +18,7 @@
 Handles command passed as argument.
 Returns 0 if command is successfully executed and -1 if an error occurs
 */
-int handle_cmd(struct command *cmd, struct client_state *client) {
+int handle_cmd(struct command *cmd, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     if (cmd->op == NULL) {
         return 0;
     }
@@ -26,11 +26,11 @@ int handle_cmd(struct command *cmd, struct client_state *client) {
     handler_func fn = get_handler_func(cmd->op);
 
     if (fn == NULL) {
-        LOG("Unkown command %s", cmd->op);
+        snprintf(response, MAX_COMMAND_SIZE, "Unknown command %s", cmd->op);
         return 0;
     }
 
-    return fn(cmd->args, client);
+    return fn(cmd->args, client, response);
 }
 
 
@@ -105,10 +105,14 @@ void run_client(char *ip, char *port) {
         input[endl_idx] = '\0';
 
         struct command *cmd = parse_command(input);
+        char response[MAX_SERVER_RESPONSE];
 
-        int err = handle_cmd(cmd, &client);
+        int err = handle_cmd(cmd, &client, response);
         if (err) {
-            LOG("%s", get_error_msg(err))
+            DISPLAY_CLIENT("%s", get_error_msg(err))
+        }
+        else {
+            DISPLAY_CLIENT("%s", response);
         }
 
         free_command(cmd);
