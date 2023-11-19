@@ -7,20 +7,22 @@
 #include "../utils/validators.h"
 #include "../utils/consts.h"
 
+#include "server.h"
+
 /**
 Print program's help message
 */
 void print_usage() {
-    char *usage_str =  
-    "usage: ./AS [-h] [-v] [-p ASport]\n\n"
+    char *usage_fmt = 
+        "usage: ./AS [-h] [-v] [-p ASport]\n\n"
 
-    "options:\n"
-    "  -h,        show this message and exit\n"
-    "  -v,        set log level to verbose\n"
-    "  -d,        set log level to debug\n"
-    "  -p ASport, port where the server will be listening (default: 600009)\n";
+        "options:\n"
+        "  -h,        show this message and exit\n"
+        "  -v,        set log level to verbose\n"
+        "  -d,        set log level to debug\n"
+        "  -p ASport, port where the server will be listening (default: %s)\n";
 
-    fprintf(stdout, "%s", usage_str);
+    fprintf(stdout, usage_fmt,  DEFAULT_PORT);
 }
 
 
@@ -64,5 +66,6 @@ int main(int argc, char **argv) {
     set_log_level(g_level);
 
     // call server(port) here
+    server(port);
     return 0;
 }
