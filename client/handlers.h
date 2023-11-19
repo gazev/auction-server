@@ -7,6 +7,21 @@
 #define ERROR_LOGIN 1
 #define ERROR_LOGOUT 2
 
+#define MAX_LOGIN_COMMAND 20
+#define MAX_LOGIN_RESPONSE 8
+#define SUCESSFULL_LOGIN "RLI OK"
+#define SUCESSFULL_REGISTER "RLI REG"
+#define UNSUCESSFULL_LOGIN "RLI NOK"
+
+#define MAX_LOGOUT_COMMAND 20
+#define MAX_LOGOUT_RESPONSE 8
+#define SUCESSFULL_LOGOUT "RLO OK"
+#define UNREGISTERED_LOGOUT "RLO UNR"
+#define UNSUCESSFULL_LOGOUT "RLO NOK"
+
+int send_request(char *, size_t, struct client_state *);
+int receive_response(char *, size_t, struct client_state *);
+
 int handle_login(struct arg *, struct client_state *);
 int handle_logout(struct arg *, struct client_state *);
 int handle_unregister(struct arg *, struct client_state *);

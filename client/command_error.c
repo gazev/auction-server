@@ -15,8 +15,8 @@ struct error_mappings {
 const 
 static 
 struct error_mappings error_lookup_table[] = {
-    ERROR_LOGIN, "Failed login",
-    ERROR_LOGOUT, "Failed logout",
+    {ERROR_LOGIN, "Failed login"},
+    {ERROR_LOGOUT, "Failed logout"},
     // put other errors here if necessary
 };
 
