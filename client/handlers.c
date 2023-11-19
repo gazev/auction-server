@@ -4,32 +4,39 @@
 #include <errno.h>
 #include <sys/time.h>
 
+#include "../utils/logging.h"
+#include "../utils/validators.h"
+#include "../utils/config.h"
+
 #include "handlers.h"
 #include "client.h"
 #include "parser.h"
-#include "../utils/logging.h"
-#include "../utils/validators.h"
 
 int send_request(char *message, size_t n_msg_bytes, struct client_state *client) {
+    LOG_DEBUG("entered send_request")
     size_t n = sendto(client->annouce_socket, message, n_msg_bytes, 0, client->as_addr, client->as_addr_len);
     if (n == -1) {
+        LOG_DEBUG("sendto fail")
         LOG_ERROR("failed while sending login response");
         return -1;
     }
     return 0;
 }
 int receive_response(char *buffer, size_t response_size, struct client_state *client) {
+    LOG_DEBUG("entered receive_response")
     //set timeout to socket
     struct timeval timeout;
     timeout.tv_sec = 300;  // Timeout in seconds
     timeout.tv_usec = 0; // Additional microseconds
     if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        LOG_DEBUG("failed setsockopt")
         LOG_ERROR("Error setting socket timeout");
         return -1;
     }
     //receive response
     size_t n = recvfrom(client->annouce_socket, buffer, response_size, 0, client->as_addr, &client->as_addr_len);
     if (n == -1) {
+        LOG_DEBUG("failed recvfrom")
         LOG_ERROR("failed while receiving response");
         return -1;
     }
@@ -45,11 +52,17 @@ int receive_response(char *buffer, size_t response_size, struct client_state *cl
 /*--------------------------------- LOGIN ------------------------------------------------------------------*/
 
 int handle_login (struct arg *args, struct client_state *client) {
+    LOG_DEBUG("entered handle_login")
+
     if (client->logged_in) {
+        LOG_DEBUG("client->logged_in = 1")
         LOG("already logged in");
         return 0;
     }
+
+    // this might not be needed because args is always initialized, even if its value is NULL
     if (args == NULL) {
+        LOG_DEBUG("NULL first arg")
         LOG_ERROR("got NULL args struct");
         return ERROR_LOGIN;
     }
@@ -78,6 +91,7 @@ int handle_login (struct arg *args, struct client_state *client) {
     char message[MAX_LOGIN_COMMAND];
     snprintf(message, MAX_LOGIN_COMMAND, "LIN %s %s\n", uid, passwd); 
     size_t n_msg_bytes = strlen(message);
+    LOG_DEBUG("blocking on send_request");
     if (send_request(message, n_msg_bytes, client)!=0)
         return ERROR_LOGIN;
 

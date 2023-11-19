@@ -6,7 +6,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../utils/config.h"
 #include "../utils/logging.h"
+
 #include "client.h"
 #include "parser.h"
 #include "command_table.h"
@@ -79,9 +81,11 @@ void free_client(struct client_state *client) {
 // int send_message(char *message, )
 
 void run_client(char *ip, char *port) {
+    LOG_DEBUG("entered run_client")
     struct client_state client;
 
     if (initialize_client(ip, port, &client) != 0) {
+        LOG_DEBUG("failed client_state init")
         LOG_ERROR("Failed initializing client connection");
         exit(1);
     }

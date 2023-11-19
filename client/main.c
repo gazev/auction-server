@@ -10,9 +10,9 @@
 
 #include <errno.h>
 
+#include "../utils/config.h"
 #include "../utils/logging.h"
 #include "../utils/validators.h"
-#include "../utils/config.h"
 
 #include "client.h"
 #include "command_table.h"

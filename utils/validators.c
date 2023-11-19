@@ -3,7 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "../client/client.h"
+#include "config.h"
 
 /**
 Check if port string is a valid port number 
@@ -31,20 +31,29 @@ int is_valid_ip_addr(char *ip_str) {
  * Check if the uid is valid
 */
 int is_valid_uid(char *uid){
-    if (strlen(uid) != UID_SIZE -1)
-        return -1;
-    if (atoi(uid) == 0)
-        return -1;
-    return 0;
+    if (strlen(uid) != UID_SIZE)
+        return 0;
+
+    int uid_len = strlen(uid);
+
+    for (int i = 0; i < uid_len; ++i) {
+        if(!isdigit(uid[i])) return 0;
+    }
+
+    return 1;
 }
 
 /**
  * Check if the password is valid
 */
 int is_valid_passwd(char *passwd){
-    if (strlen(passwd) != PASSWORD_SIZE -1)
-        return -1;
-    if (isalnum(passwd) == 0)
-        return -1;
-    return 0;
+    if (strlen(passwd) != PASSWORD_SIZE)
+        return 0;
+
+    int passwd_len = strlen(passwd);
+
+    for (int i = 0; i < passwd_len; i++) {
+        if (!isalnum(passwd[i])) return 0;
+    }
+    return 1;
 }

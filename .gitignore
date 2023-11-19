@@ -1,1 +1,7 @@
 .vscode/
+*.o
+AS
+user
+
+test_stuff/
+2023_2024_Proj_SocketProg_RC.pdf
