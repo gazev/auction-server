@@ -51,12 +51,12 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
         } else {
             LOG_ERROR("getadddrinfo: %s", gai_strerror(err));
         }
-        return 1;
+        return -1;
     }
 
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         LOG_ERROR("socket: %s", strerror(errno));
-        return 1;
+        return -1;
     }
 
     client->logged_in = 0;
@@ -66,7 +66,7 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
     client->as_addr = malloc(sizeof(struct sockaddr));
     memcpy(client->as_addr, req->ai_addr, sizeof(*req->ai_addr));
 
-    free(req);
+    freeaddrinfo(req);
 
     return 0;
 }
@@ -81,7 +81,7 @@ void free_client(struct client_state *client) {
 void run_client(char *ip, char *port) {
     struct client_state client;
 
-    if (initialize_client(ip, port, &client)) {
+    if (initialize_client(ip, port, &client) != 0) {
         LOG_ERROR("Failed initializing client connection");
         exit(1);
     }
@@ -109,8 +109,6 @@ void run_client(char *ip, char *port) {
 
         free_command(cmd);
     }
-
-    free_client(&client);
 }
 
 void clean_stdin_buffer() {

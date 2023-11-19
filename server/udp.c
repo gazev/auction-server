@@ -41,6 +41,7 @@ int serve_udp_command(char *input, struct udp_client *client) {
     return 0;
 }
 
+
 int handle_login(char *input, struct udp_client *client) {
     LOG_DEBUG("entered handle_login");
     char *uid = strtok(NULL, " ");
