@@ -21,15 +21,15 @@
 Print program's help message
 */
 void print_usage() {
-    char *usage_str =  
+    char *usage_fmt =  
     "usage: ./user [-h] [-n ASIP] [-p ASport]\n\n"
 
     "options:\n"
     "  -h,        show this message and exit\n"
     "  -n ASIP,   IP of AS server\n"
-    "  -p ASPORT, port where the server will be listening on (default: 600009)\n";
+    "  -p ASPORT, port where the server will be listening on (default: %s)\n";
 
-    fprintf(stdout, "%s", usage_str);
+    fprintf(stdout, usage_fmt, DEFAULT_PORT);
 }
 
 
