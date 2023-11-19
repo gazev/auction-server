@@ -14,7 +14,10 @@
 #include "parser.h"
 
 int send_udp_request(char *message, size_t n_msg_bytes, struct client_state *client) {
+    LOG_DEBUG("entered send_udp_response");
+    message[n_msg_bytes-1] = '\n';
     size_t n = sendto(client->annouce_socket, message, n_msg_bytes, 0, client->as_addr, client->as_addr_len);
+    LOG_DEBUG("message: %s", message);
     if (n == -1) {
         LOG_DEBUG("sendto fail")
         LOG_ERROR("failed while sending login response");
@@ -24,6 +27,7 @@ int send_udp_request(char *message, size_t n_msg_bytes, struct client_state *cli
 }
 
 int receive_udp_response(char *buffer, size_t response_size, struct client_state *client) {
+    LOG_DEBUG("entered receive_udp_response");
     //set timeout to socket
     struct timeval timeout;
     timeout.tv_sec = 300;  // Timeout in seconds
@@ -80,7 +84,7 @@ int handle_login (struct arg *args, struct client_state *client, char response[M
 
     //Create protocol message format: LIN UID password
     char message[MAX_LOGIN_COMMAND];
-    snprintf(message, MAX_LOGIN_COMMAND, "LIN %s %s\n", uid, passwd);
+    snprintf(message, MAX_LOGIN_COMMAND, "LIN %s %s", uid, passwd);
 
     //comunicate with server
     if (send_udp_request(message, MAX_LOGIN_COMMAND, client)!=0)
@@ -90,7 +94,10 @@ int handle_login (struct arg *args, struct client_state *client, char response[M
         return ERROR_LOGIN;
 
     //check result
+    LOG_DEBUG("response: %s", buffer);
     if (!strcmp(buffer, SUCESSFULL_LOGIN)){
+        memcpy(client->uid, uid, UID_SIZE);
+        memcpy(client->passwd, passwd, PASSWORD_SIZE);
         client->logged_in = 1;
         REPLY(response, "sucessfull login");
         return 0;
@@ -115,11 +122,14 @@ int handle_logout (struct arg *args, struct client_state *client, char response[
     if (!client->logged_in) {
         REPLY(response, "already logged out");
         return 0;
-    }
+    }//
 
     //Create protocol message format: LOU UID password format
     char message[MAX_LOGOUT_COMMAND];
-    snprintf(message, MAX_LOGOUT_COMMAND, "LOU %s %s\n", client->uid, client->passwd); 
+    memcpy(message, "LOU ", 4);
+    memcpy(message+4, client->uid, UID_SIZE);
+    memcpy(message+4+UID_SIZE, " ", 1);
+    memcpy(message+4+UID_SIZE+1, client->passwd, PASSWORD_SIZE);
 
     //Communicate with the server
     if (send_udp_request(message, MAX_LOGOUT_COMMAND, client)!=0)
