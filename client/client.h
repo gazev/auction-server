@@ -5,7 +5,6 @@
 
 #include "../utils/config.h"
 
-
 struct client_state {
     int logged_in;      // 1 or 0
     char uid[UID_SIZE];        // an IST number
