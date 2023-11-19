@@ -19,8 +19,8 @@
 #define UNREGISTERED_LOGOUT "RLO UNR"
 #define UNSUCESSFULL_LOGOUT "RLO NOK"
 
-int send_request(char *, size_t, struct client_state *);
-int receive_response(char *, size_t, struct client_state *);
+int send_udp_request(char *, size_t, struct client_state *);
+int receive_udp_response(char *, size_t, struct client_state *);
 
 int handle_login(struct arg *, struct client_state *);
 int handle_logout(struct arg *, struct client_state *);

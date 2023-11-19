@@ -31,7 +31,7 @@ int is_valid_ip_addr(char *ip_str) {
  * Check if the uid is valid
 */
 int is_valid_uid(char *uid){
-    if (strlen(uid) != UID_SIZE -1)
+    if (strlen(uid) != UID_SIZE)
         return -1;
     if (atoi(uid) == 0)
         return -1;
@@ -42,7 +42,7 @@ int is_valid_uid(char *uid){
  * Check if the password is valid
 */
 int is_valid_passwd(char *passwd){
-    if (strlen(passwd) != PASSWORD_SIZE -1)
+    if (strlen(passwd) != PASSWORD_SIZE)
         return -1;
     if (isalnum(passwd) == 0)
         return -1;

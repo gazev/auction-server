@@ -3,7 +3,7 @@
 
 #include <netinet/in.h>
 
-#define UID_SIZE 7
+#define UID_SIZE 6
 #define PASSWORD_SIZE 8
 
 struct client_state {
