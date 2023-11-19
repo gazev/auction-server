@@ -5,7 +5,7 @@
 
 #include "../utils/logging.h"
 #include "../utils/validators.h"
-#include "../utils/consts.h"
+#include "../utils/config.h"
 
 #include "server.h"
 
