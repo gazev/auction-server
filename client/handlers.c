@@ -126,10 +126,7 @@ int handle_logout (struct arg *args, struct client_state *client, char response[
 
     //Create protocol message format: LOU UID password format
     char message[MAX_LOGOUT_COMMAND];
-    memcpy(message, "LOU ", 4);
-    memcpy(message+4, client->uid, UID_SIZE);
-    memcpy(message+4+UID_SIZE, " ", 1);
-    memcpy(message+4+UID_SIZE+1, client->passwd, PASSWORD_SIZE);
+    sprintf(message, "LOU %.*s %.*s", UID_SIZE, client->uid, PASSWORD_SIZE, client->passwd);
 
     //Communicate with the server
     if (send_udp_request(message, MAX_LOGOUT_COMMAND, client)!=0)
