@@ -18,10 +18,11 @@
 #define UNREGISTERED_LOGOUT "RLO UNR\n"
 #define UNSUCESSFULL_LOGOUT "RLO NOK\n"
 
-/**
- * Set message for user display
-*/
-#define REPLY(destination, source) strcpy((destination), (source))
+#define MAX_UNREGISTER_COMMAND 20
+#define MAX_UNREGISTER_RESPONSE 8
+#define SUCESSFULL_UNREGISTER "RUR OK\n"
+#define UNREGISTERED_UNREGISTER "RUR UNR\n"
+#define LOGGED_OUT_UNREGISTER "RUR NOK\n"
 
 int send_udp_request(char *, size_t, struct client_state *);
 int receive_udp_response(char *, size_t, struct client_state *);

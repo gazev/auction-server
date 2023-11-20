@@ -60,7 +60,7 @@ int handle_login (struct arg *args, struct client_state *client, char response[M
 
     if (client->logged_in) {
         LOG_DEBUG("client->logged_in = 1")
-        REPLY(response, "already logged in");
+        strcpy(response, "already logged in");
         return 0;
     }
 
@@ -99,18 +99,18 @@ int handle_login (struct arg *args, struct client_state *client, char response[M
         memcpy(client->uid, uid, UID_SIZE);
         memcpy(client->passwd, passwd, PASSWORD_SIZE);
         client->logged_in = 1;
-        REPLY(response, "sucessfull login");
+        strcpy(response, "sucessfull login");
         return 0;
     }
     if (!strcmp(buffer, UNSUCESSFULL_LOGIN)){
-        REPLY(response, "incorrect login attempt");
+        strcpy(response, "incorrect login attempt");
         return 0;
     }
     if (!strcmp(buffer, SUCESSFULL_REGISTER)){
         memcpy(client->uid, uid, UID_SIZE);
         memcpy(client->passwd, passwd, PASSWORD_SIZE);
         client->logged_in = 1;
-        REPLY(response, "new user registered");
+        strcpy(response, "new user registered");
         return 0;
     }
     return ERROR_UNKNOWN_ANSWER;
@@ -120,11 +120,11 @@ int handle_login (struct arg *args, struct client_state *client, char response[M
 
 int handle_logout (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     if (!client->logged_in) {
-        REPLY(response, "already logged out");
+        strcpy(response, "already logged out");
         return 0;
     }//
 
-    //Create protocol message format: LOU UID password format
+    //Create protocol message format: LOU UID password
     char message[MAX_LOGOUT_COMMAND];
     sprintf(message, "LOU %.*s %.*s", UID_SIZE, client->uid, PASSWORD_SIZE, client->passwd);
 
@@ -138,26 +138,58 @@ int handle_logout (struct arg *args, struct client_state *client, char response[
     //check result
     if (!strcmp(buffer, SUCESSFULL_LOGOUT)){
         client->logged_in = 0;
-        REPLY(response, "sucessfull logout");
+        strcpy(response, "sucessfull logout");
         return 0;
     }
     if (!strcmp(buffer, UNSUCESSFULL_LOGOUT)){
-        REPLY(response, "user not logged in");
+        strcpy(response, "user not logged in");
         return 0;
     }
     if (!strcmp(buffer, UNREGISTERED_LOGOUT)){
-        REPLY(response, "unknown user");
+        strcpy(response, "unknown user");
         return 0;
     }
     return ERROR_UNKNOWN_ANSWER;
 }
 
+/*--------------------------------- UNREGISTER ------------------------------------------------------------------*/
+
+int handle_unregister (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
+    if (!client->logged_in) {
+        strcpy(response, "please login to unregister");
+        return 0;
+    }//
+
+    //Create protocol message format: UNR UID password
+    char message[MAX_UNREGISTER_COMMAND];
+    sprintf(message, "UNR %.*s %.*s", UID_SIZE, client->uid, PASSWORD_SIZE, client->passwd);
+
+    //Communicate with the server
+    if (send_udp_request(message, MAX_UNREGISTER_COMMAND, client)!=0)
+        return ERROR_UNREGISTER;
+    char buffer[MAX_UNREGISTER_RESPONSE];
+    if (receive_udp_response(buffer, MAX_UNREGISTER_RESPONSE, client)!=0)
+        return ERROR_UNREGISTER;
+    
+    //check result
+    if (!strcmp(buffer, SUCESSFULL_UNREGISTER)){
+        client->logged_in = 0;
+        //maybe there is a need to reset uid and password
+        strcpy(response, "successful unregister");
+        return 0;
+    }
+    if (!strcmp(buffer, UNREGISTERED_UNREGISTER)){
+        strcpy(response, "unknown user");
+        return 0;
+    }
+    if (!strcmp(buffer, LOGGED_OUT_UNREGISTER)){
+        strcpy(response, "incorrect unregister attempt");
+        return 0;
+    }
+    return ERROR_UNKNOWN_ANSWER;
+}
 
 //TODO-----------------------------------------------------------------------------------------------
-int handle_unregister (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
-    LOG_DEBUG(" ");
-    return 0;
-}
 
 int handle_exit (struct arg *args, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");

@@ -10,6 +10,7 @@
 #define ERROR_INVALID_UID 7
 #define ERROR_INVALID_PASSWD 8
 #define ERROR_UNKNOWN_ANSWER 9
+#define ERROR_UNREGISTER 10
 
 char *get_error_msg(int errcode);
 
