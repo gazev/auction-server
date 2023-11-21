@@ -78,15 +78,9 @@ void *serve_udp_connections(void *arg) {
         udp_client.addr = &client_addr;
         udp_client.addr_len = client_addr_size; 
 
-        // if no '\n' in input, then it is wrong
-        int endl_idx = strcspn(recv_buffer, "\n");
-        if (endl_idx == UDP_DATAGRAM_SIZE) {
-            LOG_VERBOSE("%s - sent too large message, ignoring request", udp_client.ipv4);
-            continue;
-        }
-
-        recv_buffer[endl_idx] = '\0';
-
+        /*
+        * Handle the request 
+        */
         LOG_DEBUG("serving %s", udp_client.ipv4);
         int err = serve_udp_command(recv_buffer, &udp_client, send_buffer, &response_size);
         // we couldn't understand the command
@@ -96,7 +90,7 @@ void *serve_udp_connections(void *arg) {
         }
 
         // command was processed, send the response
-        LOG_DEBUG("%s", send_buffer);
+        printf("%s", send_buffer);
         if (sendto(fd, send_buffer, response_size, 0, (struct sockaddr *)udp_client.addr, udp_client.addr_len) < 0) {
             LOG_ERROR("sendto: %s", strerror(errno))
             LOG_DEBUG("failed responding to client...");

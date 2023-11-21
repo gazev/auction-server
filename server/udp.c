@@ -49,8 +49,8 @@ int serve_udp_command(char *request, struct udp_client *client, char *response, 
 
     LOG_VERBOSE("Handling %s request for %s", cmd, client->ipv4);
 
-    // if the syntax of the request was incorrect or values were missing
     int err = fn(request, client, response, response_len);
+    // if the syntax of the request was incorrect or values were missing
     if (err) {
         char *error_msg = get_udp_error_msg(err);
 
@@ -81,7 +81,7 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
         return LOGIN_ERROR_BAD_VALUES;
     }
 
-    char *passwd = strtok(NULL, " ");
+    char *passwd = strtok(NULL, "\n");
 
     if (passwd == NULL) {
         LOG_DEBUG("no password supplied")
