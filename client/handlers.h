@@ -8,20 +8,21 @@
 
 #define MAX_LOGIN_COMMAND 20
 #define MAX_LOGIN_RESPONSE 8
-#define SUCESSFULL_LOGIN "RLI OK"
-#define SUCESSFULL_REGISTER "RLI REG"
-#define UNSUCESSFULL_LOGIN "RLI NOK"
+#define SUCESSFULL_LOGIN "RLI OK\n"
+#define SUCESSFULL_REGISTER "RLI REG\n"
+#define UNSUCESSFULL_LOGIN "RLI NOK\n"
 
 #define MAX_LOGOUT_COMMAND 20
 #define MAX_LOGOUT_RESPONSE 8
-#define SUCESSFULL_LOGOUT "RLO OK"
-#define UNREGISTERED_LOGOUT "RLO UNR"
-#define UNSUCESSFULL_LOGOUT "RLO NOK"
+#define SUCESSFULL_LOGOUT "RLO OK\n"
+#define UNREGISTERED_LOGOUT "RLO UNR\n"
+#define UNSUCESSFULL_LOGOUT "RLO NOK\n"
 
-/**
- * Set message for user display
-*/
-#define REPLY(destination, source) strcpy((destination), (source))
+#define MAX_UNREGISTER_COMMAND 20
+#define MAX_UNREGISTER_RESPONSE 8
+#define SUCESSFULL_UNREGISTER "RUR OK\n"
+#define UNREGISTERED_UNREGISTER "RUR UNR\n"
+#define LOGGED_OUT_UNREGISTER "RUR NOK\n"
 
 int send_udp_request(char *, size_t, struct client_state *);
 int receive_udp_response(char *, size_t, struct client_state *);
