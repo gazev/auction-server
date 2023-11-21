@@ -53,6 +53,7 @@ int main(int argc, char **argv) {
                     LOG_WARN("Invalid IP literal (contiuing assuming IP is a domain): %s", optarg);
                 }
                 ip = optarg;
+                break;
             
             case 'd': // set debug
                 g_level = LOG_DEBUG;

@@ -14,7 +14,8 @@
 #include "parser.h"
 
 int send_udp_request(char *message, size_t n_msg_bytes, struct client_state *client) {
-    size_t n = sendto(client->annouce_socket, message, n_msg_bytes, 0, client->as_addr, client->as_addr_len);
+    LOG_DEBUG("entered send_udp_request");
+    size_t n = sendto(client->annouce_socket, message, n_msg_bytes - 1, 0, client->as_addr, client->as_addr_len);
     if (n == -1) {
         LOG_DEBUG("sendto fail")
         LOG_ERROR("failed while sending login response");
@@ -90,6 +91,7 @@ int handle_login (struct arg *args, struct client_state *client, char response[M
         return ERROR_LOGIN;
 
     //check result
+    LOG_DEBUG("%s", buffer);
     if (!strcmp(buffer, SUCESSFULL_LOGIN)){
         client->logged_in = 1;
         REPLY(response, "sucessfull login");
