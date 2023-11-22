@@ -3,13 +3,14 @@
 
 int init_database();
 int exists_user(char *uid);
+
+int is_authentic_user(char *uid, char *passwd);
 int is_user_logged_in(char *uid);
+
 int log_in_user(char *uid);
 int log_out_user(char *uid);
 
 int register_user(char *uid, char* passwd);
-int unregsiter_user(char *uid);
-
-int is_authentic_user(char *uid, char *passwd);
+int unregister_user(char *uid);
 
 #endif

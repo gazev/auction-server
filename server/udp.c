@@ -54,9 +54,8 @@ int serve_udp_command(char *request, struct udp_client *client, char *response, 
     // if the syntax of the request was incorrect or values were missing
     if (err) {
         char *error_msg = get_udp_error_msg(err);
-
+        sprintf(response, "%s", error_msg);
         *response_len = strlen(error_msg);
-        sprintf(response, "%s", get_udp_error_msg(err));
     }
 
     return 0;
@@ -74,41 +73,31 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
 
     if (uid == NULL) {
         LOG_DEBUG("no UID supplied");
-        return LOGIN_ERROR_BAD_VALUES;
+        return ERR_LIN_BAD_VALUES;
     }
 
     if (!is_valid_uid(uid)) {
         LOG_DEBUG("invalid UID");
-        return LOGIN_ERROR_BAD_VALUES;
+        return ERR_LIN_BAD_VALUES;
     }
 
     char *passwd = strtok(NULL, "\n");
 
     if (passwd == NULL) {
         LOG_DEBUG("no password supplied")
-        return LOGIN_ERROR_BAD_VALUES;
+        return ERR_LIN_BAD_VALUES;
     }
 
     if (!is_valid_passwd(passwd)) {
         LOG_DEBUG("invalid passwd");
-        return LOGIN_ERROR_BAD_VALUES;
+        return ERR_LIN_BAD_VALUES;
     }
 
     LOG_VERBOSE("Handling login request for %s on %s", uid, client->ipv4);
 
-    if (exists_user(uid)) {
-        if (!is_authentic_user(uid, passwd)) {
-            LOG_DEBUG("failed auth %s", uid);
-            sprintf(response, "RLI NOK\n");
-            *response_len = 8; 
-            return 0;
-        }
-
-        sprintf(response, "RLI OK\n"); 
-        *response_len = 7;
-
-    } else { // register user if it doesn't exist
-        if (register_user(uid, passwd) != 0) { // if an error occurs during registration
+    // register user if it doesn't exist
+    if (!exists_user(uid)) {
+        if (register_user(uid, passwd) != 0) {
             LOG_DEBUG("error registering %s", uid);
             sprintf(response, "RLI NOK\n");
             *response_len = 8;
@@ -117,10 +106,18 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
 
         sprintf(response, "RLI REG\n");
         *response_len = 8;
+        return 0;
+    }
+
+    // authenticate user
+    if (!is_authentic_user(uid, passwd)) {
+        sprintf(response, "RLI NOK\n");
+        *response_len = 8;
+        return 0;
     }
 
     // login user
-    if (log_in_user(uid) == -1) {
+    if (log_in_user(uid) != 0) {
         LOG_DEBUG("error logging %s", uid);
         // if an error occured during login
         sprintf(response, "RLI NOK\n");
@@ -128,16 +125,127 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
         return 0;
     }
 
+    sprintf(response, "RLI OK\n"); 
+    *response_len = 7;
+
     return 0;
 }
 
 int handle_logout(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_logout");
+    char *uid = strtok(NULL, " ");
+
+    if (uid == NULL) {
+        return ERR_LOU_BAD_VALUES;
+    }
+
+    if (!is_valid_uid(uid)) {
+        return ERR_LOU_BAD_VALUES;
+    }
+
+    char *passwd = strtok(NULL, "\n");
+
+    if (passwd == NULL) {
+        return ERR_LOU_BAD_VALUES;
+    }
+
+    if (!is_valid_passwd(passwd)) {
+        return ERR_LOU_BAD_VALUES;
+    }
+
+    LOG_VERBOSE("Handling logout request for %s on %s", uid, client->ipv4);
+
+    // check if user exists
+    if (!exists_user(uid)) {
+        sprintf(response, "RLO UNR\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    // check if user is logged in
+    if (!is_user_logged_in(uid)) {
+        sprintf(response, "RLO NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    // check if user password and uid match
+    if (!is_authentic_user(uid, passwd)) {
+        sprintf(response, "RLO NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    // logout user
+    if (log_out_user(uid) != 0) {
+        LOG_DEBUG("failed logging out user");
+        sprintf(response, "RLO NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    sprintf(response, "RLO OK\n");
+    *response_len = 8;
+
     return 0;
 }
 
 int handle_unregister(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_unregister");
+    char *uid = strtok(NULL, " ");
+
+    if (uid == NULL) {
+        return ERR_UNR_BAD_VALUES;
+    }
+
+    if (!is_valid_uid(uid)) {
+        return ERR_UNR_BAD_VALUES;
+    }
+
+    char *passwd = strtok(NULL, "\n");
+
+    if (passwd == NULL) {
+        return ERR_UNR_BAD_VALUES;
+    }
+
+    if (!is_valid_passwd(passwd)) {
+        return ERR_UNR_BAD_VALUES;
+    }
+
+    LOG_VERBOSE("Handling logout request for %s on %s", uid, client->ipv4);
+
+    // check if user exists
+    if (!exists_user(uid)) {
+        sprintf(response, "RUR UNR\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    // check if user is logged in
+    if (!is_user_logged_in(uid)) {
+        sprintf(response, "RUR NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    // authenticate user
+    if (!is_authentic_user(uid, passwd)) {
+        sprintf(response, "RUR NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    // unregister user
+    if (unregister_user(uid) != 0) {
+        // if an internal occurs during unregistration
+        sprintf(response, "RUR NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    sprintf(response, "RUR OK\n");
+    *response_len = 7;
+
     return 0;
 }
 

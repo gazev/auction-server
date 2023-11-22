@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "../utils/config.h"
+#include "../utils/logging.h"
 
 #include "database.h"
 
@@ -19,32 +20,32 @@ const static mode_t SERVER_MODE = S_IREAD | S_IWRITE | S_IEXEC;
 * Initializes DB. Returns 0 on success and -1 on fatal error.
 */
 int init_database() {
-    // LOG_DEBUG("entered init_database");
+    LOG_DEBUG("entered init_database");
     if (mkdir(DB_ROOT, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
-            // LOG_ERROR("mkdir: %s", strerror(errno));
-            // LOG_DEBUG("failed creating root directory, fatal...");
+            LOG_ERROR("mkdir: %s", strerror(errno));
+            LOG_DEBUG("failed creating root directory, fatal...");
             return -1;;
         }
     }
 
     if (chdir(DB_ROOT) != 0) {
-        // LOG_ERROR("chdir: %s", strerror(errno));
+        LOG_ERROR("chdir: %s", strerror(errno));
         return -1;
     }
 
     if (mkdir("USERS", SERVER_MODE) != 0) {
         if (errno != EEXIST) {
-            // LOG_ERROR("mkdir: %s", strerror(errno));
-            // LOG_DEBUG("failed creating USERS directory, fatal...");
+            LOG_ERROR("mkdir: %s", strerror(errno));
+            LOG_DEBUG("failed creating USERS directory, fatal...");
             return -1;
         }
     }
 
     if (mkdir("AUCTIONS", SERVER_MODE) != 0) {
         if (errno != EEXIST) {
-            // LOG_ERROR("mkdir: %s", strerror(errno));
-            // LOG_DEBUG("failed creating AUCTIONS directory, fatal...");
+            LOG_ERROR("mkdir: %s", strerror(errno));
+            LOG_DEBUG("failed creating AUCTIONS directory, fatal...");
             return -1;
         }
     }
@@ -92,14 +93,25 @@ int is_user_logged_in(char *uid) {
 */
 int log_in_user(char *uid) {
     char user_login_path[256];
-    FILE *fp;
 
     sprintf(user_login_path, "USERS/%s/%s_login.txt", uid, uid);
-    if ((fp = fopen(user_login_path, "r")) == NULL) {
+    if (open(user_login_path, O_CREAT, SERVER_MODE) == -1) {
+        LOG_DEBUG("couldn't create login file for user %s", uid);
         return -1;
     }
 
-    fclose(fp);
+    return 0;
+}
+
+int log_out_user(char *uid) {
+    char user_login_path[256];
+
+    sprintf(user_login_path, "USERS/%s/%s_login.txt", uid, uid);
+    if (remove(user_login_path) != 0) {
+        LOG_ERROR("remove: %s", strerror(errno));
+        LOG_DEBUG("failed removing login file %s", uid);
+        return -1;
+    }
 
     return 0;
 }
@@ -114,7 +126,8 @@ int register_user(char *uid, char *passwd) {
     sprintf(user_file_path, "USERS/%s", uid);
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
-            perror("mkdir");
+            LOG_ERROR("mkdir: %s", strerror(errno));
+            LOG_DEBUG("couldn't  create user directory for user %s", uid);
             return -1;
         }
     }
@@ -123,20 +136,23 @@ int register_user(char *uid, char *passwd) {
     sprintf(user_file_path, "USERS/%s/%s_pass.txt", uid, uid);
     int pass_fd = open(user_file_path, O_CREAT | O_WRONLY, SERVER_MODE);
     if (pass_fd == -1) {
-        perror("open");
+        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("couldn't  create user password file for user %s", uid);
         return -1;
     }
 
     // write password
     if (write(pass_fd, passwd, 8) != 8) {
-        perror("write");
+        LOG_ERROR("write: %s", strerror(errno));
+        LOG_DEBUG("couldn't write password for user %s", uid);
         return -1;
     }
 
     // mark user as logged in (e.g touch root/USERS/123456/123456_login.txt)
     sprintf(user_file_path, "USERS/%s/%s_login.txt", uid, uid);
     if (open(user_file_path, O_CREAT, SERVER_MODE) == -1) {
-        perror("open");
+        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("couldn't create login file for user %s", uid);
         return -1;
     }
 
@@ -144,7 +160,8 @@ int register_user(char *uid, char *passwd) {
     sprintf(user_file_path, "USERS/%s/HOSTED", uid);
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
-            perror("mkdir");
+            LOG_ERROR("mkdir: %s", strerror(errno));
+            LOG_DEBUG("couldn't HOSTED directory for user %s", uid);
             return -1;
         }
     }
@@ -153,7 +170,8 @@ int register_user(char *uid, char *passwd) {
     sprintf(user_file_path, "USERS/%s/BIDDED", uid);
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
-            perror("mkdir");
+            LOG_ERROR("mkdir: %s", strerror(errno));
+            LOG_DEBUG("couldn't BIDDED directory for user %s", uid);
             return -1;
         }
     }
@@ -170,14 +188,16 @@ int unregister_user(char *uid) {
     // remove user's passwd
     sprintf(user_file_path, "USERS/%s/%s_pass.txt", uid, uid);
     if (remove(user_file_path) != 0) {
-        perror("remove");
+        LOG_ERROR("remove: %s", uid);
+        LOG_DEBUG("failed removing password file for user %s", uid);
         return -1;
     }
 
     // remove user's login
     sprintf(user_file_path, "USERS/%s/%s_login.txt", uid, uid);
     if (remove(user_file_path) != 0) {
-        perror("remove");
+        LOG_ERROR("remove: %s", strerror(errno));
+        LOG_DEBUG("failed removing login file for user %s", uid);
         return -1;
     }
 
@@ -188,7 +208,8 @@ int unregister_user(char *uid) {
     // remove all assets in HOSTED
     sprintf(user_file_path, "USERS/%s/HOSTED", uid);
     if ((dp = opendir(user_file_path)) == NULL) {
-        perror("opendir");
+        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("failed openning HOSTED directory for user %s", uid);
         return -1;
     }
 
@@ -197,14 +218,16 @@ int unregister_user(char *uid) {
 
         sprintf(asset_file_path, "USERS/%s/HOSTED/%s", uid, cur->d_name);
         if (remove(asset_file_path) != 0) {
-            perror("remove");
+            LOG_ERROR("remove: %s", strerror(errno));
+            LOG_DEBUG("couldn't remove asset file %s", asset_file_path);
         }
     }
 
     // remove all assets in BIDDED
     sprintf(user_file_path, "USERS/%s/BIDDED", uid);
     if ((dp = opendir(user_file_path)) == NULL) {
-        perror("opendir");
+        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("failed openning BIDDED directory for user %s", uid);
         return -1;
     }
 
@@ -213,6 +236,8 @@ int unregister_user(char *uid) {
 
         sprintf(asset_file_path, "USERS/%s/BIDDED/%s", uid, cur->d_name);
         if (remove(asset_file_path) != 0) {
+            LOG_ERROR("remove: %s", strerror(errno));
+            LOG_DEBUG("couldn't remove asset file %s", asset_file_path);
             perror("remove");
         }
     }
