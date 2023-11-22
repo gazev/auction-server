@@ -11,6 +11,7 @@
 #include "server.h"
 #include "udp_command_table.h"
 #include "udp_errors.h"
+#include "database.h"
 
 #include "udp.h"
 
@@ -64,7 +65,7 @@ int serve_udp_command(char *request, struct udp_client *client, char *response, 
 
 /**
 * Performs a login request.
-* If an error occures the corresponding error value is returned. If successful
+* If an error occurs the corresponding error value is returned. If successful
 * 0 is returned
 **/
 int handle_login(char *input, struct udp_client *client, char *response, size_t *response_len) {
@@ -95,8 +96,37 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
 
     LOG_VERBOSE("Handling login request for %s on %s", uid, client->ipv4);
 
-    sprintf(response, "Hello fucker\n");
-    *response_len = 13;
+    if (exists_user(uid)) {
+        if (!is_authentic_user(uid, passwd)) {
+            LOG_DEBUG("failed auth %s", uid);
+            sprintf(response, "RLI NOK\n");
+            *response_len = 8; 
+            return 0;
+        }
+
+        sprintf(response, "RLI OK\n"); 
+        *response_len = 7;
+
+    } else { // register user if it doesn't exist
+        if (register_user(uid, passwd) != 0) { // if an error occurs during registration
+            LOG_DEBUG("error registering %s", uid);
+            sprintf(response, "RLI NOK\n");
+            *response_len = 8;
+            return 0;
+        }
+
+        sprintf(response, "RLI REG\n");
+        *response_len = 8;
+    }
+
+    // login user
+    if (log_in_user(uid) == -1) {
+        LOG_DEBUG("error logging %s", uid);
+        // if an error occured during login
+        sprintf(response, "RLI NOK\n");
+        *response_len = 8;
+        return 0;
+    }
 
     return 0;
 }

@@ -13,9 +13,11 @@
 #include <pthread.h>
 
 #include "../utils/logging.h"
-#include "udp.h"
 
 #include "server.h"
+
+#include "database.h"
+#include "udp.h"
 
 
 /**
@@ -161,6 +163,12 @@ void *serve_tcp_connections(void *arg) {
 void server(char *port) {
     LOG_DEBUG("entered");
     pthread_t tid[2]; // thread for UDP and thread for TCP
+
+    // initialize database
+    if (init_database() != 0) {
+        LOG_DEBUG("failed initializing db");
+        LOG_ERROR("signal: %s", strerror(errno));
+    }
 
     // ignore SIGPIPE handler
     if (signal(SIGPIPE, SIG_IGN) != 0) {
