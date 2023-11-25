@@ -11,8 +11,11 @@
 #include "tcp_command_table.h"
 #include "database.h"
 #include "tcp.h"
+#include "tcp_errors.h"
 
 int read_tcp_stream(char *buff, int size, struct tcp_client *);
+int send_tcp_response(char *buff, int size, struct tcp_client *);
+
 int is_valid_opa_arg(char *arg, int argno);
 
 /**
@@ -41,7 +44,10 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
     // is well behaved, if not it will return an error code to be communicated to the client 
     int err = fn(cmd, client);
     if (err) {
-        ;
+        char *err_msg = get_tcp_error_msg(err);
+        if (send_tcp_response(err_msg, 8, client) != 0) {
+            LOG_DEBUG("failed responding with errmessage to client %s", client->ipv4);
+        }
     }
 
     return 0;
@@ -55,36 +61,36 @@ int handle_open(char *cmd, struct tcp_client *client) {
     int err = read_tcp_stream(buff, UID_SIZE + PASSWORD_SIZE + 3, client);
     if (err) {
         LOG_DEBUG("failed reading uid and passwd from stream");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
     // no delimiters after OPA and password
     if (buff[0] != ' ' || buff[UID_SIZE + PASSWORD_SIZE + 2] != ' ') {
         LOG_DEBUG("bad formatted OPA command");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
     char *uid = strtok(buff, " ");
-    char *password = strtok(NULL, " ");
+    char *passwd = strtok(NULL, " ");
 
     if (uid == NULL) {
         LOG_DEBUG("no uid");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
-    if (password == NULL) {
+    if (passwd == NULL) {
         LOG_DEBUG("no password");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
     if (!is_valid_uid(uid)) {
         LOG_DEBUG("invalid uid");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
-    if (!is_valid_passwd(password)) {
+    if (!is_valid_passwd(passwd)) {
         LOG_DEBUG("invalid password");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
     /**
@@ -115,7 +121,7 @@ int handle_open(char *cmd, struct tcp_client *client) {
         curr_arg_len += read;
         if (curr_arg_len - 1 > get_opa_arg_len(argno)) {
             LOG_DEBUG("invalid size for argumnet (argno: %d)", argno);
-            return -1;
+            return OPA_BAD_ARGS;
         }
 
         // one argument received, read it 
@@ -147,15 +153,32 @@ int handle_open(char *cmd, struct tcp_client *client) {
     
     if (fsize < 0 || fsize > 10000000) {
         LOG_DEBUG("invalid fsize");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
-    char buffer[32768]; // 32 KiB
-    int total_read = 0;
-
-    while (total_read < fsize) {
-
+    if (!exists_user(uid) || !is_user_logged_in(uid)) {
+        LOG_DEBUG("user doesn't exist or is not logged in")
+        char *resp = "ROA NLG\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("failed send_tcp_response");
+        }
+        return 0;
     }
+
+    if (!is_authentic_user(uid, passwd)) {
+        LOG_DEBUG("failed authentication for user %s", uid);
+        char *resp = "ROA NLG\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("failed send_tcp_response");
+        }
+        return 0;
+    }
+
+    // char buffer[32768]; // 32 KiB
+    // int total_read = 0;
+    // while (total_read < fsize) {
+
+    // }
 
     return 0;
 }
@@ -167,12 +190,12 @@ int handle_close(char *cmd, struct tcp_client *client) {
     int err = read_tcp_stream(buff, UID_SIZE + PASSWORD_SIZE + AID_SIZE + 4, client);
     if (err) {
         LOG_DEBUG("failed reading from tcp stream");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
     if (buff[0] != ' ' || buff[UID_SIZE + PASSWORD_SIZE + AID_SIZE + 3] != '\n') {
         LOG_DEBUG("invalid format");
-        return -1;
+        return OPA_BAD_ARGS;
     }
 
     char *uid = strtok(buff, " "); 
@@ -271,6 +294,28 @@ int read_tcp_stream(char *buff, int size, struct tcp_client *client) {
 
         total_read += read;
         ptr += read;
+    }
+
+    return 0;
+}
+
+int send_tcp_response(char *resp, int size, struct tcp_client *client) {
+    char *ptr = resp;
+    int total_sent = 0;
+    while (total_sent < size) {
+        int written = send(client->conn_fd, ptr + total_sent, size - total_sent, 0);
+        if (written < 0) {
+            if (errno == EPIPE) {
+                LOG_DEBUG("connection closed by client %s", client->ipv4);
+            } else {
+                LOG_ERROR("send: %s", strerror(errno));
+                LOG_DEBUG("failed sending response to client %s", client->ipv4);
+            }
+            return -1;
+        }
+
+        total_sent += written;
+        ptr += written;
     }
 
     return 0;

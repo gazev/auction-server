@@ -27,7 +27,7 @@ static
 int tcp_command_table_entries = sizeof(tcp_command_table) / sizeof(struct tcp_command_mappings);
 
 const
-static int args_len[] = {
+static int opa_args_len[] = {
     ASSET_NAME_LEN,
     START_VALUE_LEN,
     TIME_ACTIVE_LEN,
@@ -54,5 +54,5 @@ int get_opa_arg_len(int argno) {
         return 0;
     }
 
-    return args_len[argno];
+    return opa_args_len[argno];
 }

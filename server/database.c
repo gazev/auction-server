@@ -17,7 +17,7 @@
 
 const static mode_t SERVER_MODE = S_IREAD | S_IWRITE | S_IEXEC;
 
-static int bid_count = 0;
+static int auc_count = 0;
 void load_db_state();
 
 /**
@@ -76,7 +76,7 @@ void load_db_state() {
         return;
     }
 
-    bid_count = atoi(bid_c);
+    auc_count = atoi(bid_c);
 }
 
 /**
@@ -158,36 +158,12 @@ int register_user(char *uid, char *passwd) {
         }
     }
     
-    // create user password file (e.g root/USERS/123456/123456_pass.txt)
-    sprintf(user_file_path, "USERS/%s/%s_pass.txt", uid, uid);
-    int pass_fd = open(user_file_path, O_CREAT | O_WRONLY, SERVER_MODE);
-    if (pass_fd == -1) {
-        LOG_ERROR("open: %s", strerror(errno));
-        LOG_DEBUG("couldn't  create user password file for user %s", uid);
-        return -1;
-    }
-
-    // write password
-    if (write(pass_fd, passwd, 8) != 8) {
-        LOG_ERROR("write: %s", strerror(errno));
-        LOG_DEBUG("couldn't write password for user %s", uid);
-        return -1;
-    }
-
-    // mark user as logged in (e.g touch root/USERS/123456/123456_login.txt)
-    sprintf(user_file_path, "USERS/%s/%s_login.txt", uid, uid);
-    if (open(user_file_path, O_CREAT, SERVER_MODE) == -1) {
-        LOG_ERROR("open: %s", strerror(errno));
-        LOG_DEBUG("couldn't create login file for user %s", uid);
-        return -1;
-    }
-
     // create user's HOSTED dir
     sprintf(user_file_path, "USERS/%s/HOSTED", uid);
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_ERROR("mkdir: %s", strerror(errno));
-            LOG_DEBUG("couldn't HOSTED directory for user %s", uid);
+            LOG_DEBUG("couldn't create HOSTED directory for user %s", uid);
             return -1;
         }
     }
@@ -197,27 +173,49 @@ int register_user(char *uid, char *passwd) {
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_ERROR("mkdir: %s", strerror(errno));
-            LOG_DEBUG("couldn't BIDDED directory for user %s", uid);
+            LOG_DEBUG("couldn't create BIDDED directory for user %s", uid);
             return -1;
         }
+    }
+
+   // mark user as logged in (e.g touch root/USERS/123456/123456_login.txt)
+    sprintf(user_file_path, "USERS/%s/%s_login.txt", uid, uid);
+    if (open(user_file_path, O_CREAT, SERVER_MODE) == -1) {
+        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("couldn't create login file for user %s", uid);
+        return -1;
+    }
+
+    // create user password file (e.g root/USERS/123456/123456_pass.txt)
+    sprintf(user_file_path, "USERS/%s/%s_pass.txt", uid, uid);
+    int pass_fd = open(user_file_path, O_CREAT | O_WRONLY, SERVER_MODE);
+    if (pass_fd == -1) {
+        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("couldn't create user password file for user %s", uid);
+        return -1;
+    }
+
+    // write password
+    if (write(pass_fd, passwd, 8) != 8) {
+        LOG_ERROR("write: %s", strerror(errno));
+        LOG_DEBUG("couldn't write password for user %s", uid);
+        if (remove(user_file_path) != 0) {
+            LOG_DEBUG("failed removing %s_pass.txt after failure registering user, ghost user %s is now created", uid, uid);
+        }
+        return -1;
     }
  
     return 0;
 }
 
 /**
-* Unregister a user.
+* Unregister a user. Returns 0 on success and -1 on failure, which may screw the
+* user's bids and hosted auctions. It would take way too much work to use tmp files for this, also,
+* databases are so complex to implement we simply assume it's not necessary for 
+* this project
 */
 int unregister_user(char *uid) {
     char user_file_path[256];
-
-    // remove user's passwd
-    sprintf(user_file_path, "USERS/%s/%s_pass.txt", uid, uid);
-    if (remove(user_file_path) != 0) {
-        LOG_ERROR("remove: %s", uid);
-        LOG_DEBUG("failed removing password file for user %s", uid);
-        return -1;
-    }
 
     // remove user's login
     sprintf(user_file_path, "USERS/%s/%s_login.txt", uid, uid);
@@ -264,9 +262,17 @@ int unregister_user(char *uid) {
         if (remove(asset_file_path) != 0) {
             LOG_ERROR("remove: %s", strerror(errno));
             LOG_DEBUG("couldn't remove asset file %s", asset_file_path);
-            perror("remove");
         }
     }
+
+    // remove user's passwd
+    sprintf(user_file_path, "USERS/%s/%s_pass.txt", uid, uid);
+    if (remove(user_file_path) != 0) {
+        LOG_ERROR("remove: %s", uid);
+        LOG_DEBUG("failed removing password file for user %s", uid);
+        return -1;
+    }
+
 
     return 0;
 }
@@ -289,3 +295,117 @@ int is_authentic_user(char *uid, char *passwd) {
 
     return strcmp(stored_password, passwd) == 0 ? 1 : 0;
 }
+
+/**
+* Creates a new auction and returns it's AID if successfull. On failure returns -1
+*/
+int create_auction_dir() { 
+    char auction_file_path[256];
+    char bids_file_path[256];
+
+    // if we reached the limit auctions
+    if (auc_count >= 999) {
+        return -1;
+    }
+
+    auc_count++;
+
+    // create auction directory    
+    sprintf(auction_file_path, "AUCTIONS/%03d", auc_count);
+    if (mkdir(auction_file_path, SERVER_MODE) != 0) {
+        if (errno != EEXIST) {
+            LOG_DEBUG("failed creating new auction %s", auction_file_path);
+            return -1;
+        }
+    }
+
+    // create BIDS folder inside dir
+    sprintf(bids_file_path, "AUCTIONS/%03d/BIDS", auc_count);
+    if (mkdir(auction_file_path, SERVER_MODE) != 0) {
+        LOG_ERROR("mkdir: %s", strerror(errno));
+        if (errno != EEXIST) {
+            LOG_DEBUG("failed creating bids folder for auction %s", bids_file_path);
+            return -1;
+        }
+    }
+
+    return auc_count;
+}
+
+void rollback_auction_dir_creation() {
+    char auction_file_path[256];
+    char bids_file_path[256];
+
+    DIR *dp;
+    struct dirent *cur;
+
+    // directory for auction doesn't exist (creation failed because max limit was exceeded)
+    sprintf(auction_file_path, "AUCTIONS/%03d", auc_count);
+    if ((dp = opendir(auction_file_path)) == NULL) {
+        if (errno == ENOENT) { // directory doesn't exist
+            LOG_DEBUG("doesn't exist / wasn't created");
+        } else {
+            LOG_ERROR("open: %s", strerror(errno));
+            LOG_DEBUG("failed opening %03d auction directory on rollback action, database might be corrupted", auc_count);
+        }
+        return;
+    }
+
+    // remove all files inside directory
+    while ((cur = readdir(dp)) != NULL) {
+        if (cur->d_name[0] == '.') continue;
+
+        // remove all files
+        if (cur->d_type == DT_REG) {
+            if (remove(cur->d_name) != 0) {
+                LOG_ERROR("remove: %s", strerror(errno));
+                LOG_DEBUG("couldn't remove asset file %s on rollback action, database might be corrupted", cur->d_name);
+            }
+        }
+    }
+
+    // remove bids if they exist
+    sprintf(bids_file_path, "AUCTIONS/%03d/BIDS", auc_count);
+    if ((dp = opendir(bids_file_path)) != NULL) {
+        while ((cur = readdir(dp)) != NULL) {
+            if (cur->d_name[0] == '.') continue;
+
+            if (cur->d_type == DT_REG) {
+                if (remove(cur->d_name) != 0) {
+                    LOG_ERROR("remove: %s", strerror(errno));
+                    LOG_DEBUG("couldn't remove bid file %s on rollback action, database might be corrupted", cur->d_name);
+                }
+            }
+
+        }
+    }
+
+    // remove directory
+    if ((remove(auction_file_path) != 0)) {
+        LOG_ERROR("remove: %s", strerror(errno));
+        LOG_DEBUG("failed removing auction %03d directory on rollback action, a ghost auction now exists", auc_count);
+    }
+ 
+    auc_count--;
+    return;
+}
+
+
+int create_new_auction(char *uid, char *name, int sv, int ta) {
+    int auc_id;
+    if ((auc_id = create_auction_dir()) < 0) {
+        rollback_auction_dir_creation();
+        return -1;
+    }
+    
+    return 0;
+}
+
+
+// int main() {
+//     init_database();
+//     int r = create_new_auction("001", "name", 1234, 1234);
+//     if (r != 0) {
+//         printf("failed");
+//     }
+// }
