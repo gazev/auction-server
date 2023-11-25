@@ -14,7 +14,11 @@
 
 #include "database.h"
 
+
 const static mode_t SERVER_MODE = S_IREAD | S_IWRITE | S_IEXEC;
+
+static int bid_count = 0;
+void load_db_state();
 
 /**
 * Initializes DB. Returns 0 on success and -1 on fatal error.
@@ -50,7 +54,29 @@ int init_database() {
         }
     }
 
+    if (open("db_state.txt", O_CREAT | O_WRONLY, SERVER_MODE) < 0) {
+        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("failed creating db_state.txt file");
+        return -1;
+    }
+
+    load_db_state();
+
     return 0;
+}
+
+void load_db_state() {
+    char bid_c[4];
+
+    FILE *fp = fopen("db_state.txt", "r");
+    fgets(bid_c, 4, fp);
+
+    // no state
+    if (strlen(bid_c) == 0) {
+        return;
+    }
+
+    bid_count = atoi(bid_c);
 }
 
 /**

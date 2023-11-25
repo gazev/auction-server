@@ -23,7 +23,7 @@
 * If 0 is returned, the server response shall be written to response and the response_len
 * shall be set to indicate the response's size
 */
-int serve_udp_command(char *request, struct udp_client *client, char *response, size_t *response_len) {
+int handle_udp_command(char *request, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered serve_udp_command");
     char *cmd = strtok(request, " ");
 
@@ -40,7 +40,7 @@ int serve_udp_command(char *request, struct udp_client *client, char *response, 
         return -1;
     }
 
-    udp_handler_fn fn = get_udp_handler_func(cmd);
+    udp_handler_fn fn = get_udp_handler_fn(cmd);
 
     if (fn == NULL) {
         LOG_DEBUG("NULL fn handler")
@@ -249,23 +249,23 @@ int handle_unregister(char *input, struct udp_client *client, char *response, si
     return 0;
 }
 
-int handle_exit(char *input, struct udp_client *client, char *response, size_t *response_len) {
-    LOG_DEBUG("entered handle_exit");
-    return 0;
-}
-
-int handle_open(char *input, struct udp_client *client, char *response, size_t *response_len) {
-    LOG_DEBUG("entered handle_open");
-    return 0;
-}
-
-int handle_close(char *input, struct udp_client *client, char *response, size_t *respnose_len) {
-    LOG_DEBUG("entered handle_close");
-    return 0;
-}
-
 int handle_my_auctions(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered");
+    return 0;
+}
+
+int handle_my_bids(char *input, struct udp_client *client, char *response, size_t *response_len) {
+    LOG_DEBUG("entered handle_my_bids");
+    return 0;
+}
+
+int handle_list(char *input, struct udp_client *client, char *response, size_t *response_len) {
+    LOG_DEBUG("entered handle_list");
+    return 0;
+}
+
+int handle_show_record(char *input, struct udp_client *client, char *response, size_t *response_len) {
+    LOG_DEBUG("entered handle_show_record");
     return 0;
 }
 

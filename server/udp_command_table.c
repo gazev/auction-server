@@ -3,11 +3,11 @@
 #include <string.h>
 
 #include "../utils/logging.h"
-#include "udp.h"
 
+#include "udp.h"
 #include "udp_command_table.h"
 
-struct command_mappings {
+struct udp_command_mappings {
     const char cmd_op[3];
     udp_handler_fn func;
 };
@@ -15,25 +15,25 @@ struct command_mappings {
 // maps the command string to the their respective function handler 
 const 
 static 
-struct command_mappings udp_command_table[] = {
+struct udp_command_mappings udp_command_table[] = {
     {"LIN", handle_login},
     {"LOU", handle_logout},
     {"UNR", handle_unregister},
-    {"LMA", handle_exit},
-    {"LMB", handle_open},
-    {"LST", handle_close},
-    {"SRC", handle_my_auctions},
+    {"LMA", handle_my_auctions},
+    {"LMB", handle_my_bids},
+    {"LST", handle_list},
+    {"SRC", handle_show_record},
 };
 
 
 const 
 static 
-int udp_command_table_entries = sizeof(udp_command_table) / sizeof(struct command_mappings);
+int udp_command_table_entries = sizeof(udp_command_table) / sizeof(struct udp_command_mappings);
 
 /**
 Get function handler for command
 */
-udp_handler_fn get_udp_handler_func(char *cmd) {
+udp_handler_fn get_udp_handler_fn(char *cmd) {
     LOG_DEBUG("entered get_handler_func");
     for (int i = 0; i < udp_command_table_entries; ++i) {
         if (strcmp(cmd, udp_command_table[i].cmd_op) == 0) {

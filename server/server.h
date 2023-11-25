@@ -8,8 +8,11 @@
 
 struct udp_client {
     char ipv4[INET_ADDRSTRLEN];
-    struct sockaddr_in *addr;
-    socklen_t addr_len;
+};
+
+struct tcp_client {
+    int conn_fd;
+    char ipv4[INET_ADDRSTRLEN];
 };
 
 void server(char *port);
