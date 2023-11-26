@@ -145,8 +145,8 @@ int handle_open(char *cmd, struct tcp_client *client) {
     }
 
     char *name = args[0];
-    int start_val = atoi(args[1]);
-    int time_active = atoi(args[2]);
+    int sv = atoi(args[1]); // start value
+    int ta = atoi(args[2]); // time active
 
     char *fname = args[3];
     long fsize = atol(args[3]);
@@ -174,11 +174,25 @@ int handle_open(char *cmd, struct tcp_client *client) {
         return 0;
     }
 
-    // char buffer[32768]; // 32 KiB
-    // int total_read = 0;
-    // while (total_read < fsize) {
+    // create new auction
+    int auction_id = create_new_auction(uid, name, fname, sv, ta, fsize, client->conn_fd);
+    if (auction_id == -1) {
+        LOG_DEBUG("failed creating new auction")
+        char *resp = "ROA NOK\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("failed send_tcp_response");
+        }
+        return 0;
+    }
 
-    // }
+    LOG_VERBOSE("auction %03d sucessfully created for user %s", auction_id, uid);
+
+    // respond to client
+    char resp[12];
+    sprintf(resp, "ROA OK %03d\n", auction_id);
+    if (send_tcp_response(resp, 11, client) != 0) {
+        LOG_DEBUG("failed send_tcp_response");
+    }
 
     return 0;
 }

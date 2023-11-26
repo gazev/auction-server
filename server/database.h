@@ -13,4 +13,6 @@ int log_out_user(char *uid);
 int register_user(char *uid, char* passwd);
 int unregister_user(char *uid);
 
+int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int fisze, int fd);
+
 #endif

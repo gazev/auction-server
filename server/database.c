@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <time.h>
 
 #include <sys/stat.h>
 
@@ -314,6 +315,7 @@ int create_auction_dir() {
     sprintf(auction_file_path, "AUCTIONS/%03d", auc_count);
     if (mkdir(auction_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
+            LOG_ERROR("mkdir: %s", strerror(errno));
             LOG_DEBUG("failed creating new auction %s", auction_file_path);
             return -1;
         }
@@ -322,8 +324,8 @@ int create_auction_dir() {
     // create BIDS folder inside dir
     sprintf(bids_file_path, "AUCTIONS/%03d/BIDS", auc_count);
     if (mkdir(auction_file_path, SERVER_MODE) != 0) {
-        LOG_ERROR("mkdir: %s", strerror(errno));
         if (errno != EEXIST) {
+            LOG_ERROR("mkdir: %s", strerror(errno));
             LOG_DEBUG("failed creating bids folder for auction %s", bids_file_path);
             return -1;
         }
@@ -351,13 +353,15 @@ void rollback_auction_dir_creation() {
         return;
     }
 
+    char asset_file[256];
     // remove all files inside directory
     while ((cur = readdir(dp)) != NULL) {
         if (cur->d_name[0] == '.') continue;
 
         // remove all files
         if (cur->d_type == DT_REG) {
-            if (remove(cur->d_name) != 0) {
+            sprintf(asset_file, "AUCTIONS/%03d/%s", auc_count, cur->d_name);
+            if (remove(asset_file) != 0) {
                 LOG_ERROR("remove: %s", strerror(errno));
                 LOG_DEBUG("couldn't remove asset file %s on rollback action, database might be corrupted", cur->d_name);
             }
@@ -371,7 +375,8 @@ void rollback_auction_dir_creation() {
             if (cur->d_name[0] == '.') continue;
 
             if (cur->d_type == DT_REG) {
-                if (remove(cur->d_name) != 0) {
+                sprintf(asset_file, "AUCTIONS/%03d/BIDS/%s", auc_count, cur->d_name);
+                if (remove(asset_file) != 0) {
                     LOG_ERROR("remove: %s", strerror(errno));
                     LOG_DEBUG("couldn't remove bid file %s on rollback action, database might be corrupted", cur->d_name);
                 }
@@ -391,21 +396,76 @@ void rollback_auction_dir_creation() {
 }
 
 
-int create_new_auction(char *uid, char *name, int sv, int ta) {
+/**
+* This is a very big operation, it could be more granular.
+*/
+int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int fsize, int fd) {
     int auc_id;
     if ((auc_id = create_auction_dir()) < 0) {
         rollback_auction_dir_creation();
         return -1;
     }
-    
+
+    // create START_AID.txt file
+    char start_file_path[256];
+    sprintf(start_file_path, "AUCTIONS/%03d/START_%03d.txt", auc_count, auc_count);
+    if (open(start_file_path, O_CREAT | O_WRONLY, SERVER_MODE) < 0) {
+        LOG_ERROR("open: %s", strerror(errno));
+        rollback_auction_dir_creation();
+        return -1;
+    }
+
+    // process date
+    time_t epoch_time; 
+    if ((epoch_time = time(NULL)) == ((time_t ) - 1)) {
+        LOG_ERROR("time: %s", strerror(errno));
+        rollback_auction_dir_creation();
+        return -1;
+    }
+
+    struct tm *tm_time;
+    if ((tm_time = gmtime(&epoch_time)) == NULL) {
+        rollback_auction_dir_creation();
+        return -1;
+    }
+
+    char str_time[20];
+    sprintf(str_time, "%4d-%02d-%02d %02d:%02d:%02d", 
+                        tm_time->tm_year + 1900, tm_time->tm_mon + 1, tm_time->tm_mday,
+                        tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
+
+
+    char start_data[256];
+    sprintf(start_data, "%s %s %s %d %d %s %ld\n", 
+                            uid, name, fname, sv, ta, str_time, epoch_time);
+
+    // write data to START_AID.txt file
+    FILE *fp;
+    if ((fp = fopen(start_file_path, "w")) == NULL) {
+        rollback_auction_dir_creation();
+        return -1;
+    }
+
+    if (fputs(start_data, fp) < 0) {
+        fclose(fp);
+        rollback_auction_dir_creation();
+        return -1;
+    }
+
+    fclose(fp);
+
     return 0;
 }
 
 
-// int main() {
-//     init_database();
-//     int r = create_new_auction("001", "name", 1234, 1234);
-//     if (r != 0) {
-//         printf("failed");
-//     }
-// }
+int main() {
+    // init_database();
+    // int r = create_new_auction("gonga", "name", "fname", 1234, 1234);
+    // if (r != 0) {
+    //     printf("failed");
+    // }
+    // r = create_new_auction("gonga", "name", "fname", 1234, 1234);
+    // if (r != 0) {
+    //     printf("failed");
+    // }
+}
