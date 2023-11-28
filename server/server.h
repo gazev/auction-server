@@ -15,6 +15,17 @@ struct tcp_client {
     char ipv4[INET_ADDRSTRLEN];
 };
 
+typedef struct thread_t {
+    pthread_t tid;
+    int thread_nr;
+    void *args;
+} thread_t;
+
+struct tcp_server_thread_arg {
+    void *tasks_queue;
+        void *port;
+};
+
 void server(char *port);
 
 #endif

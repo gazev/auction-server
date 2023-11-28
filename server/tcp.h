@@ -3,8 +3,8 @@
 
 #include "server.h"
 
+int serve_tcp_connection(struct tcp_client *);
 int handle_tcp_command(char *cmd, struct tcp_client *);
-
 int handle_open(char *cmd, struct tcp_client *);
 int handle_close(char *cmd, struct tcp_client *);
 int handle_show_asset(char *cmd, struct tcp_client *);

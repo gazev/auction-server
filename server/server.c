@@ -18,19 +18,25 @@
 #include "../utils/logging.h"
 
 #include "server.h"
+#include "tasks_queue.h"
 
 #include "database.h"
 #include "udp.h"
 #include "tcp.h"
 
+static pthread_t worker_threads[THREAD_POOL_SIZE];
 
 /**
 * Main UDP socket serving loop
 */
 void *udp_server_thread_fn(void *arg) {
     LOG_DEBUG("entered serve_udp_connections");
-    char *port = (char *)arg;
+    thread_t *thread = arg;
+    char *port = thread->args;
 
+    /**
+    * Set socket for UDP server
+    */
     int fd; // UDP socket
     struct sockaddr_in client_addr, server_addr;
     socklen_t client_addr_size = sizeof(client_addr);
@@ -56,13 +62,13 @@ void *udp_server_thread_fn(void *arg) {
     LOG("Serving UDP on port %s", port);
 
     /**
-    Main loop for UDP socket
+    * Main loop for UDP server 
     */
     struct udp_client udp_client;
     char client_ipv4[INET_ADDRSTRLEN];
 
-    char recv_buffer[UDP_DATAGRAM_SIZE];
-    char send_buffer[UDP_DATAGRAM_SIZE];
+    char recv_buffer[UDP_DATAGRAM_SIZE]; // to where we read requests 
+    char send_buffer[UDP_DATAGRAM_SIZE]; // where responses are stored before sending
     size_t response_size;
     while (1) {
         memset(&udp_client, 0, sizeof(struct udp_client));
@@ -77,8 +83,10 @@ void *udp_server_thread_fn(void *arg) {
             exit(1);
         }
 
-        // check for bad payloads
-        if (read > 20) {
+        /**
+        * Perform basic message validation
+        */
+        if (read > 20) { // check for messages too long (for the current protocol) 
             if (sendto(fd, "ERR\n", 4, 0, (struct sockaddr *)&client_addr, client_addr_size) < 0) {
                 LOG_ERROR("sendto: %s", strerror(errno))
                 LOG_DEBUG("failed responding to client...");
@@ -97,22 +105,23 @@ void *udp_server_thread_fn(void *arg) {
 
         // copy ipv4 string into client_ipv4 string variable
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ipv4, INET6_ADDRSTRLEN);
+
         // initialize client struct
         strcpy(udp_client.ipv4, client_ipv4);
 
-        /*
+        /**
         * Handle the request 
         */
         LOG_DEBUG("serving %s", udp_client.ipv4);
         int err = handle_udp_command(recv_buffer, &udp_client, send_buffer, &response_size);
-        // if we couldn't understand the command
-        if (err) {
+        if (err) { // the message didn't pass further validation steps 
             strcpy(send_buffer, "ERR\n");
             response_size = 4;
         }
 
-        // command was processed, send the response
-        printf("%s", send_buffer);
+        /**
+        * Respond to client
+        */
         if (sendto(fd, send_buffer, response_size, 0, (struct sockaddr *)&client_addr, client_addr_size) < 0) {
             LOG_ERROR("sendto: %s", strerror(errno))
             LOG_DEBUG("failed responding to client...");
@@ -126,7 +135,15 @@ Main TCP socket serving loop
 */
 void *tcp_server_thread_fn(void *arg) {
     LOG_DEBUG("entered serve_tcp_connections");
-    char *port = (char *)arg;
+    thread_t *thread = arg;
+
+    // retrieve arguments
+    char *port           = ((struct tcp_server_thread_arg *)thread->args)->port;
+    tasks_queue *tasks_q = ((struct tcp_server_thread_arg *)thread->args)->tasks_queue;
+
+    /**
+    * Set socket for TCP server
+    */
     int server_sock;
     struct sockaddr_in client_addr, server_addr;
 
@@ -137,8 +154,7 @@ void *tcp_server_thread_fn(void *arg) {
     }
 
     server_addr.sin_family      = AF_INET;
-    // atoi converts string to int, htons converts int bytes in C to bytes in network notation (big endian) 
-    server_addr.sin_port        = htons(atoi(port));
+    server_addr.sin_port        = htons(atoi(port)); // convert port str to necessary format
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if ((bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr))) != 0) {
@@ -153,13 +169,16 @@ void *tcp_server_thread_fn(void *arg) {
         exit(1);
     }
 
-    LOG("Serving TCP on port %s", port);
+    LOG("Listening TCP on port %s", port);
 
+    /**
+    * Main loop for TCP server (delegating to worker threads)
+    */
     char client_ipv4[INET_ADDRSTRLEN];
     struct tcp_client tcp_client;
 
     char conn_fd;
-    int pid;
+    int  pid;
     socklen_t client_addr_size = sizeof(client_addr);
     while (1) {
         memset(&tcp_client, 0, sizeof(struct tcp_client));
@@ -173,94 +192,44 @@ void *tcp_server_thread_fn(void *arg) {
 
         // copy ipv4 string into client_ipv4 string variable
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ipv4, INET6_ADDRSTRLEN);
+
         // initialize client struct
         strcpy(tcp_client.ipv4, client_ipv4);
         tcp_client.conn_fd = conn_fd;
 
-        pid = fork();
-        if (pid == -1) { // error creating child
-            LOG_ERROR("fork: %s", strerror(errno));
-            LOG_DEBUG("failed creating child process for client %s", tcp_client.ipv4);
-        } else if (pid == 0) { // child
-            close(server_sock);
-
-            struct timeval timeout;
-            timeout.tv_sec = 5; // 5 sec timeout
-            timeout.tv_usec = 0;
-
-            // set timeout for socket
-            if (setsockopt(conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
-                LOG_ERROR("setsockopt: %s", strerror(errno));
-                LOG_DEBUG("failed setting time out socket for client %s", tcp_client.ipv4);
-                exit(1);
-            }
-
-            /**
-            * Read command message from stream
-            */
-            char cmd_buffer[8];
-            char *ptr = cmd_buffer;
-            int cmd_size = 3; // command size
-            int total_read = 0;
-            // read protocol operation 
-            while (total_read < cmd_size) {
-                int read = recv(conn_fd, ptr + total_read, cmd_size - total_read, 0);
-
-                if (read < 0) {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        LOG_VERBOSE("timed out client %s", tcp_client.ipv4);
-                        exit(0);
-                    } else {
-                        LOG_ERROR("recv: %s", strerror(errno));
-                        LOG_DEBUG("failed reading from socket. client %s", tcp_client.ipv4);
-                        exit(1);
-                    }
-                }
-
-                if (read == 0) {
-                    LOG_DEBUG("connection closed by client %s", tcp_client.ipv4);
-                    close(conn_fd);
-                    exit(0);
-                }
-                
-                total_read += read;
-                ptr += read;
-            }
-
-            LOG_DEBUG("serving %s", tcp_client.ipv4);
-            // handle the command
-            int err = handle_tcp_command(cmd_buffer, &tcp_client);
-            if (err) { // if we could not understand the command
-                char *err = "ERR\n";
-                char *ptr = err;
-                char err_len = 4;
-                int total_written = 0;
-                while (total_written < err_len) {
-                    int written = send(conn_fd, ptr, err_len - total_written, 0);
-
-                    if (written < 0) {
-                        LOG_ERROR("write: %s", strerror(errno));
-                        LOG_DEBUG("failed responding to client");
-                        break;
-                    }
-
-                    total_written += written;
-                }
-            }
-
-            close(conn_fd);
-            exit(0);
-        } else { // server proc
-            close(conn_fd);
+        if (enqueue(tasks_q, &tcp_client) != 0) {
+            LOG_DEBUG("failed enqeueing client %s, ignoring connection", tcp_client.ipv4);
+            continue;
         }
+    }
+}
+
+/**
+* Worker threads that handle a TCP client connection
+*/
+void *tcp_worker_thread_fn(void *arg) {
+    thread_t *thread = (thread_t *) arg;
+    LOG_DEBUG("launched tcp worker thread nr %d, (tid %lu)", thread->thread_nr, thread->tid);
+
+    tasks_queue *q = thread->args;
+
+    task_t task;
+    while (1) {
+        // get work from task queue
+        if (dequeue(q, &task) != 0) {
+            LOG_ERROR("failed retrieving task from queue");
+            continue;
+        }
+        // do work
+        if (serve_tcp_connection(&task) != 0) {
+            LOG_DEBUG("failed serving tcp client");
+        };
     }
 }
 
 
 void server(char *port) {
     LOG_DEBUG("entered server");
-    pthread_t tid[2]; // thread for UDP and thread for TCP
-
     // initialize database
     if (init_database() != 0) {
         LOG_DEBUG("failed initializing db");
@@ -273,27 +242,80 @@ void server(char *port) {
         LOG_ERROR("signal: %s", strerror(errno));
         exit(1);
     }
+        
+    /**
+    * Launch all server threads. 
+    * 1 thread receiving and responding to UDP messages 
+    * 1 thread accepting TCP connections
+    * 20 threads handling TCP connections (THREAD_POOL_SIZE = 20)
+    */
+    thread_t udp_thread;
+    thread_t tcp_thread;
+    thread_t threads[THREAD_POOL_SIZE];
 
-    // launch udp server thread
-    if (pthread_create(&tid[0], NULL, udp_server_thread_fn, (void *)port)) {
+    tasks_queue *tasks_q; // producer consumer queue
+    //  producer consumer queue
+    if (init_queue(&tasks_q) != 0) {
+        LOG_DEBUG("failed initializing tasks queue");
+        exit(1);
+    }
+
+    // launch tcp workers thread pool
+    for (int i = 0; i < THREAD_POOL_SIZE; i++) {
+        threads[i].thread_nr = i;
+        threads[i].args = tasks_q;
+        if (pthread_create(&threads[i].tid, NULL, tcp_worker_thread_fn, (void *)&threads[i]) != 0) {
+            LOG_DEBUG("failed launching thread pool");
+            LOG_ERROR("pthread_create: %s", strerror(errno));
+            exit(1);
+        };
+    }
+
+    // launch UDP server thread
+    udp_thread.args = port;
+    if (pthread_create(&udp_thread.tid, NULL, udp_server_thread_fn, (void *)&udp_thread)) {
         LOG_DEBUG("failed");
         LOG_ERROR("failed creating udp server thread");
         exit(1);
     }
 
-    // launch tcp server thread
-    if (pthread_create(&tid[1], NULL, tcp_server_thread_fn, (void *)port)) {
+    // launch TCP server thread
+    struct tcp_server_thread_arg tcp_args = {
+        .port = port,
+        .tasks_queue = tasks_q,
+    };
+
+    tcp_thread.args = &tcp_args;
+    if (pthread_create(&tcp_thread.tid, NULL, tcp_server_thread_fn, (void *)&tcp_thread)) {
         LOG_DEBUG("failed");
         LOG_ERROR("failed creating tcp server thread");
         exit(1);
     }
 
+    /** 
+    * Block here forever, no exit mechanism was specified 
+    */
+    if (pthread_join(udp_thread.tid, NULL) != 0) {
+        LOG_DEBUG("failed joining UDP thread")
+        LOG_ERROR("pthread_join: %s", strerror(errno));
+        exit(1);
+    }
+
+    if (pthread_join(tcp_thread.tid, NULL) != 0) {
+        LOG_DEBUG("failed joining UDP thread")
+        LOG_ERROR("pthread_join: %s", strerror(errno));
+        exit(1);
+    }
+
     // block here forever
     for (int i = 0; i < 2; i++) {
-        if (pthread_join(tid[i], NULL) != 0) {
+        if (pthread_join(threads[i].tid, NULL) != 0) {
             LOG_DEBUG("failed");
             LOG_ERROR("failed joining threads");
             exit(1);
         }
     }
+
+
+    exit(0);
 }

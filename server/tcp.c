@@ -19,6 +19,79 @@ int send_tcp_response(char *buff, int size, struct tcp_client *);
 int is_valid_opa_arg(char *arg, int argno);
 
 /**
+* Serve a TCP connection
+*/
+int serve_tcp_connection(struct tcp_client *client) {
+    struct timeval timeout;
+    timeout.tv_sec = 5; // 5 sec timeout
+    timeout.tv_usec = 0;
+
+    // set timeout for socket
+    if (setsockopt(client->conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
+        LOG_ERROR("setsockopt: %s", strerror(errno));
+        LOG_DEBUG("failed setting time out socket for client %s", client->ipv4);
+        return -1;
+    }
+
+    /**
+    * Read command message from stream
+    */
+    char cmd_buffer[8];
+    char *ptr = cmd_buffer;
+    int cmd_size = 3; // command size
+    int total_read = 0;
+    // read protocol operation 
+    while (total_read < cmd_size) {
+        int read = recv(client->conn_fd, ptr + total_read, cmd_size - total_read, 0);
+
+        if (read < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                LOG_VERBOSE("timed out client %s", client->ipv4);
+                return 0;
+            } else {
+                LOG_ERROR("recv: %s", strerror(errno));
+                LOG_DEBUG("failed reading from socket. client %s", client->ipv4);
+                return -1;
+            }
+        }
+
+        if (read == 0) {
+            LOG_DEBUG("connection closed by client %s", client->ipv4);
+            close(client->conn_fd);
+            return 0;
+        }
+        
+        total_read += read;
+        ptr += read;
+    }
+
+    LOG_DEBUG("serving %s", client->ipv4);
+    // handle the command
+    int err = handle_tcp_command(cmd_buffer, client);
+    if (err) { // if we could not understand the command
+        char *err = "ERR\n";
+        char *ptr = err;
+        char err_len = 4;
+        int total_written = 0;
+        while (total_written < err_len) {
+            int written = send(client->conn_fd, ptr, err_len - total_written, 0);
+
+            if (written < 0) {
+                LOG_ERROR("write: %s", strerror(errno));
+                LOG_DEBUG("failed responding to client");
+                break;
+            }
+
+            total_written += written;
+        }
+    }
+
+    close(client->conn_fd);
+
+    return 0;
+}
+
+/**
 * Handles command for a TCP client. 
 * If 0 is returned, then the command was successfully handled and the client
 * notified of the result.
