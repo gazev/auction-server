@@ -13,8 +13,8 @@ struct tcp_command_mappings {
 };
 
 // maps the command string to the their respective function handler 
-const 
 static 
+const 
 struct tcp_command_mappings tcp_command_table[] = {
     {"OPA", handle_open},
     {"CLS", handle_close},
@@ -22,12 +22,13 @@ struct tcp_command_mappings tcp_command_table[] = {
     {"BID", handle_bid},
 };
 
-const 
 static 
+const 
 int tcp_command_table_entries = sizeof(tcp_command_table) / sizeof(struct tcp_command_mappings);
 
+static
 const
-static int opa_args_len[] = {
+int opa_args_len[] = {
     ASSET_NAME_LEN,
     START_VALUE_LEN,
     TIME_ACTIVE_LEN,

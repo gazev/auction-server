@@ -13,8 +13,8 @@ struct udp_command_mappings {
 };
 
 // maps the command string to the their respective function handler 
-const 
 static 
+const 
 struct udp_command_mappings udp_command_table[] = {
     {"LIN", handle_login},
     {"LOU", handle_logout},
@@ -26,8 +26,8 @@ struct udp_command_mappings udp_command_table[] = {
 };
 
 
-const 
 static 
+const 
 int udp_command_table_entries = sizeof(udp_command_table) / sizeof(struct udp_command_mappings);
 
 /**

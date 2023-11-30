@@ -59,7 +59,7 @@ int is_valid_passwd(char *passwd){
 * Check if given name for an asset is valid
 */
 int is_valid_name(char *name) {
-    int len = strlen(name);
+    size_t len = strlen(name);
 
     if (len > ASSET_NAME_LEN)
         return 0;
@@ -74,7 +74,7 @@ int is_valid_name(char *name) {
 * Check if given start value string is a valid start value (simply numeric with len <= 6)
 */
 int is_valid_start_value(char *sv) {
-    int len = strlen(sv);
+    size_t len = strlen(sv);
 
     if (len > START_VALUE_LEN || len == 0)
         return 0;
@@ -89,7 +89,7 @@ int is_valid_start_value(char *sv) {
 * Check if given time active string is a valid time active value (numeric with len <= 5)
 */
 int is_valid_time_active(char *ta) {
-    int len = strlen(ta);
+    size_t len = strlen(ta);
 
     if (len > TIME_ACTIVE_LEN || len == 0)
         return 0;
@@ -116,7 +116,7 @@ int is_valid_path_char(char c) {
 * Check if given fname is valid
 */
 int is_valid_fname(char *fname) {
-    int len = strlen(fname);
+    size_t len = strlen(fname);
 
     if (len > FNAME_LEN || len == 0)
         return 0;
@@ -135,7 +135,7 @@ int is_valid_fname(char *fname) {
 * Check if given fsize is valid
 */
 int is_valid_fsize(char *fsize) {
-    int len = strlen(fsize);
+    size_t len = strlen(fsize);
 
     if (len > FSIZE_STR_LEN || len == 0)
         return 0;
@@ -147,7 +147,7 @@ int is_valid_fsize(char *fsize) {
 }
 
 int is_valid_aid(char *aid) {
-    int len = strlen(aid);
+    size_t len = strlen(aid);
 
     if (len != AID_SIZE)
         return 0;

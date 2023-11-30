@@ -17,8 +17,8 @@ char *udp_errors_table[] = {
 // define two different errorcodes here and it would just work with little changes in
 // handle_login
 
-const
 static
+const
 char udp_error_table_entries = sizeof(udp_errors_table) / sizeof (char *);
 
 char *get_udp_error_msg(int errcode) {
