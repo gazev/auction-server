@@ -12,7 +12,9 @@ struct tcp_command_mappings {
     tcp_handler_fn func;
 };
 
-// maps the command string to the their respective function handler 
+/**
+* TCP Command table
+*/
 static 
 const 
 struct tcp_command_mappings tcp_command_table[] = {
@@ -22,9 +24,16 @@ struct tcp_command_mappings tcp_command_table[] = {
     {"BID", handle_bid},
 };
 
-static 
-const 
-int tcp_command_table_entries = sizeof(tcp_command_table) / sizeof(struct tcp_command_mappings);
+
+// lookup table for strings that represent error codes returned from tcp_handler_fn 
+// each error message is indexed by it's errcode, check tcp_errors.h
+static
+char *tcp_errors_table[] = {
+    "", // return code 0 is not an error
+    "ROA ERR\n", // OPA with bad args 
+    "RCL ERR\n", // CLS with bad args 
+    "RBD ERR\n", // VUD wutg vad args 
+};
 
 static
 const
@@ -35,6 +44,15 @@ int opa_args_len[] = {
     FNAME_LEN,
     FSIZE_STR_LEN,
 };
+
+
+static 
+const 
+int tcp_command_table_entries = sizeof(tcp_command_table) / sizeof(struct tcp_command_mappings);
+
+const
+static
+char tcp_error_table_entries = sizeof(tcp_errors_table) / sizeof (char *);
 
 /**
 Get function handler for command
@@ -50,10 +68,19 @@ tcp_handler_fn get_tcp_handler_fn(char *cmd) {
     return NULL;
 }
 
+
 int get_opa_arg_len(int argno) {
     if (argno < 0 || argno > 5) {
         return 0;
     }
 
     return opa_args_len[argno];
+}
+
+
+char *get_tcp_error_msg(int errcode) {
+    if (errcode < 0 || errcode >= tcp_error_table_entries)
+        return NULL;
+
+    return tcp_errors_table[errcode];
 }

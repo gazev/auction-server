@@ -15,7 +15,6 @@
 #include "tcp_command_table.h"
 #include "database.h"
 #include "tcp.h"
-#include "tcp_errors.h"
 
 int read_tcp_stream(char *buff, int size, struct tcp_client *);
 int send_tcp_response(char *buff, int size, struct tcp_client *);

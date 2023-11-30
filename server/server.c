@@ -40,8 +40,8 @@ void *udp_server_thread_fn(void *thread_v) {
 
     // initialize UDP socket
     if ((udp_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        LOG_DEBUG("Failed initializing UDP socket");
         LOG_ERROR("socket: %s", strerror(errno));
-        LOG_DEBUG("failed initializing UDP socket, fatal...");
         exit(1);
     }
 
@@ -51,8 +51,8 @@ void *udp_server_thread_fn(void *thread_v) {
     server_addr.sin_addr.s_addr = INADDR_ANY; // bind to all interfaces
 
     if ((bind(udp_sock, (struct sockaddr *)&server_addr, sizeof(server_addr))) != 0) {
+        LOG_DEBUG("Failed binding UDP socket");
         LOG_ERROR("bind: %s", strerror(errno));
-        LOG_DEBUG("failed binding UDP socket, fatal...");
         exit(1);
     }
 

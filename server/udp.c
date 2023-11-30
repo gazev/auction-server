@@ -10,7 +10,6 @@
 
 #include "server.h"
 #include "udp_command_table.h"
-#include "udp_errors.h"
 #include "database.h"
 
 #include "udp.h"
@@ -265,7 +264,38 @@ int handle_unregister(char *input, struct udp_client *client, char *response, si
 }
 
 int handle_my_auctions(char *input, struct udp_client *client, char *response, size_t *response_len) {
-    LOG_DEBUG("entered");
+    char *uid = strtok(NULL, " ");
+
+    if (uid == NULL) {
+        LOG_DEBUG("%s:%d - [LMA] No UID supplied", client->ipv4, client->port);
+        return ERR_LMA_BAD_VALUES;
+    }
+
+    if (!is_valid_uid(uid)) {
+        LOG_DEBUG("%s:%d - [LMA] Invalid UID", client->ipv4, client->port);
+        return ERR_LMA_BAD_VALUES;
+    }
+
+    char *passwd = strtok(NULL, "\n");
+
+    if (passwd == NULL) {
+        LOG_DEBUG("%s:%d - [LMA] No password supplied", client->ipv4, client->port);
+        return ERR_LMA_BAD_VALUES;
+    }
+
+    if (!is_valid_passwd(passwd)) {
+        LOG_DEBUG("%s:%d - [LMA] Invalid password", client->ipv4, client->port);
+        return ERR_LMA_BAD_VALUES;
+    }
+
+    // check if user exists
+    if (!exists_user(uid) || !is_user_logged_in(uid) || !is_authentic_user(uid, passwd)) {
+        LOG_VERBOSE("%s:%d - [LMA] User %s doesn't exist", client->ipv4, client->port, uid);
+        sprintf(response, "RMA NLG\n");
+        *response_len = 8;
+        return 0;
+    }
+
     return 0;
 }
 
