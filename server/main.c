@@ -95,7 +95,10 @@ int main(int argc, char **argv) {
             exit(1);
         }
 
-        close(log_fd);
+        if (close(log_fd) != 0) {
+            LOG_DEBUG("Failed closing log_fd");
+            LOG_ERROR("close: %s", strerror(errno));
+        };
     }
 
     // call server(port) here

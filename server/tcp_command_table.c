@@ -58,7 +58,6 @@ char tcp_error_table_entries = sizeof(tcp_errors_table) / sizeof (char *);
 Get function handler for command
 */
 tcp_handler_fn get_tcp_handler_fn(char *cmd) {
-    LOG_DEBUG("entered get_handler_func");
     for (int i = 0; i < tcp_command_table_entries; ++i) {
         if (strcmp(cmd, tcp_command_table[i].cmd_op) == 0) {
             return tcp_command_table[i].func;

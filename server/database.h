@@ -12,8 +12,10 @@ int is_user_logged_in(char *uid);
 
 int exists_auction(char *aid);
 int is_auction_finished(char *aid);
+
 int get_auction_info(char *aid, char *buff, int n);
-int get_auction_asset_filename(char *aid, char *buff, char n);
+int get_user_auctions(char *uid, char *buff);
+int get_auctions_list(char *buff);
 
 /**
 * DB action API 

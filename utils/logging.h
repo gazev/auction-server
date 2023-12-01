@@ -14,7 +14,7 @@ extern log_level_t g_level;
     do {                                                                     \
         char buf[2048];                                                      \
         snprintf(buf, 2048, __VA_ARGS__);                                    \
-        fprintf(stdout, "[LOG] %s\n", buf);                                  \
+        fprintf(stdout, "[LOG]: %s\n", buf);                                  \
     } while (0);
 
 
@@ -23,7 +23,7 @@ extern log_level_t g_level;
         if (g_level) {                                                       \
             char buf[2048];                                                  \
             snprintf(buf, 2048, __VA_ARGS__);                                \
-            fprintf(stdout, "[LOG] %s\n", buf);                              \
+            fprintf(stdout, "[LOG]: %s\n", buf);                              \
         }                                                                    \
     } while (0);
 
@@ -32,7 +32,7 @@ extern log_level_t g_level;
     do {                                                                     \
         char buf[2048];                                                      \
         snprintf(buf, 2048, __VA_ARGS__);                                    \
-        fprintf(stderr, "[ERROR] %s\n", buf);                                \
+        fprintf(stderr, "[ERROR]: %s\n", buf);                                \
     } while (0);
 
 
@@ -40,7 +40,7 @@ extern log_level_t g_level;
     do {                                                                      \
         char buf[2048];                                                       \
         snprintf(buf, 2048, __VA_ARGS__);                                     \
-        fprintf(stderr, "[WARN] %s\n", buf);                                  \
+        fprintf(stderr, "[WARN]: %s\n", buf);                                  \
     } while (0);
 
 
@@ -49,7 +49,7 @@ extern log_level_t g_level;
         if (g_level == LOG_DEBUG) {                                           \
             char buf[2048];                                                   \
             snprintf(buf, 2048, __VA_ARGS__);                                 \
-            fprintf(stdout, "[DEBUG] %s:%d :: %s :: %s\n", __FILE__,          \
+            fprintf(stdout, "[DEBUG]: %s:%d :: %s :: %s\n", __FILE__,          \
                     __LINE__, __func__, buf);                                 \
         }                                                                     \
     } while (0);

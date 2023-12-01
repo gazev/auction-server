@@ -40,7 +40,7 @@ void *udp_server_thread_fn(void *thread_v) {
 
     // initialize UDP socket
     if ((udp_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        LOG_DEBUG("Failed initializing UDP socket");
+        LOG_ERROR("Failed initializing UDP socket");
         LOG_ERROR("socket: %s", strerror(errno));
         exit(1);
     }
@@ -51,12 +51,12 @@ void *udp_server_thread_fn(void *thread_v) {
     server_addr.sin_addr.s_addr = INADDR_ANY; // bind to all interfaces
 
     if ((bind(udp_sock, (struct sockaddr *)&server_addr, sizeof(server_addr))) != 0) {
-        LOG_DEBUG("Failed binding UDP socket");
+        LOG_ERROR("Failed binding UDP socket");
         LOG_ERROR("bind: %s", strerror(errno));
         exit(1);
     }
 
-    LOG("Serving UDP on port %s", port);
+    LOG("[UDP] Serving UDP connections on port %s", port);
 
     /**
     * Main loop for UDP server 
@@ -73,8 +73,8 @@ void *udp_server_thread_fn(void *thread_v) {
 
         ssize_t read = recvfrom(udp_sock, recv_buffer, sizeof(recv_buffer), 0, (struct sockaddr*)&client_addr, &client_addr_size);
         if (read < 0) {
-            LOG_DEBUG("Failed reading from UDP socket");
-            LOG_ERROR("recvfrom: %s", strerror(errno));
+            LOG_DEBUG("[UDP] Failed reading from socket");
+            LOG_ERROR("[UDP] recvfrom: %s", strerror(errno));
             continue;
         }
 
@@ -89,28 +89,32 @@ void *udp_server_thread_fn(void *thread_v) {
         */
          // check for messages too long (for the current protocol) 
         if (read > 20) {
-            LOG_VERBOSE("%s:%d - Ignoring too long message", udp_client.ipv4, udp_client.port);
+            LOG_VERBOSE("%s:%d - [UDP] Ignoring too long message", udp_client.ipv4, udp_client.port);
             if (sendto(udp_sock, "ERR\n", 4, 0, (struct sockaddr *)&client_addr, client_addr_size) < 0) {
-                LOG_DEBUG("Failed responding to client...");
-                LOG_ERROR("sendto: %s", strerror(errno))
+                LOG_DEBUG("[UDP] Failed responding to client...");
+                LOG_ERROR("[UDP] sendto: %s", strerror(errno))
             }
             continue;
         }
 
         // check for message not ending in \n 
         if (recv_buffer[read - 1] != '\n') {
-            LOG_VERBOSE("%s:%d - Ignoring badly formatted message", udp_client.ipv4, udp_client.port);
+            LOG_VERBOSE("%s:%d - [UDP] Ignoring badly formatted message", udp_client.ipv4, udp_client.port);
             if (sendto(udp_sock, "ERR\n", 4, 0, (struct sockaddr *)&client_addr, client_addr_size) < 0) {
-                LOG_DEBUG("Failed responding to client...");
+                LOG_DEBUG("[UDP] Failed responding to client...");
                 LOG_ERROR("sendto: %s", strerror(errno))
             }
             continue;
         }
 
+        // put null termination at the end of the input
+        // this makes it easier to handle arguments
+        recv_buffer[read - 1] = '\0';
+
         /**
         * Handle the request 
         */
-        LOG_VERBOSE("%s:%d - Serving UDP client", udp_client.ipv4, udp_client.port);
+        LOG_VERBOSE("%s:%d - [UDP] Serving client", udp_client.ipv4, udp_client.port);
 
         int err = handle_udp_command(recv_buffer, &udp_client, send_buffer, &response_size);
         if (err) { // the message didn't pass further validation steps 
@@ -122,7 +126,7 @@ void *udp_server_thread_fn(void *thread_v) {
         * Respond to client
         */
         if (sendto(udp_sock, send_buffer, response_size, 0, (struct sockaddr *)&client_addr, client_addr_size) < 0) {
-            LOG_DEBUG("%s:%d - Failed responding to client", udp_client.ipv4, udp_client.port);
+            LOG_DEBUG("%s:%d - [UDP] Failed responding to client", udp_client.ipv4, udp_client.port);
             LOG_ERROR("sendto: %s", strerror(errno))
         }
     }
@@ -148,8 +152,8 @@ void *tcp_server_thread_fn(void *thread_v) {
     struct sockaddr_in server_addr;
 
     if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        LOG_DEBUG("Failed setting up TCP socket");
-        LOG_ERROR("socket: %s", strerror(errno));
+        LOG_ERROR("[TPC] Failed setting up TCP socket");
+        LOG_ERROR("[TCP] socket: %s", strerror(errno));
         exit(1);
     }
 
@@ -158,18 +162,18 @@ void *tcp_server_thread_fn(void *thread_v) {
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if ((bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr))) != 0) {
-        LOG_DEBUG("Failed binding TCP socket");
-        LOG_ERROR("bind: %s", strerror(errno));
+        LOG_ERROR("[TCP] Failed binding TCP socket");
+        LOG_ERROR("[TCP] bind: %s", strerror(errno));
         exit(1);
     }
 
     if ((listen(server_sock, 30)) == -1) {
-        LOG_DEBUG("Failed to listen to TCP on socket");
-        LOG_ERROR("listen: %s", strerror(errno));
+        LOG_ERROR("[TPC] Failed to listen to TCP on socket");
+        LOG_ERROR("[TCP] listen: %s", strerror(errno));
         exit(1);
     }
 
-    LOG("Listening to TCP on port %s", port);
+    LOG("[TPC] Listening for TCP connections on port %s", port);
 
     /**
     * Main loop for TCP server (delegating to worker threads)
@@ -185,8 +189,8 @@ void *tcp_server_thread_fn(void *thread_v) {
         memset(&client_addr, 0, sizeof(client_addr));
 
         if ((conn_fd = accept(server_sock, (struct sockaddr*) &client_addr, &client_addr_size)) < 0) {
-            LOG_DEBUG("Failed accepting new connection");
-            LOG_ERROR("accept: %s", strerror(errno));
+            LOG_DEBUG("[TCP] Failed accepting new connection");
+            LOG_ERROR("[TPC] accept: %s", strerror(errno));
             continue;
         }
 
@@ -199,8 +203,11 @@ void *tcp_server_thread_fn(void *thread_v) {
         tcp_client.port = htons(client_addr.sin_port); 
 
         if (enqueue(tasks_q, &tcp_client) != 0) {
-            LOG_DEBUG("%s:%d - Failed enqeueing client task, ignoring connection", tcp_client.ipv4, tcp_client.port);
-            close(tcp_client.conn_fd);
+            LOG_DEBUG("%s:%d - [TCP] Failed enqeueing client task, dropping connection", tcp_client.ipv4, tcp_client.port);
+            if (close(tcp_client.conn_fd) != 0) {
+                LOG_DEBUG("[TPC] Failed closing tcp_client.conn_fd");
+                LOG_ERROR("[TCP] close: %s", strerror(errno));
+            };
             continue;
         }
     }
@@ -219,13 +226,13 @@ void *tcp_worker_thread_fn(void *arg) {
     while (1) {
         // get work from task queue
         if (dequeue(q, &task) != 0) {
-            LOG_ERROR("Failed retrieving task from queue");
+            LOG_DEBUG("[TCP] Failed retrieving task from queue");
             continue;
         }
         // do work
-        LOG_DEBUG("Worker %d handling client %s", thread->thread_nr, task.ipv4);
+        LOG_DEBUG("[TCP] Worker %d handling client %s", thread->thread_nr, task.ipv4);
         if (serve_tcp_connection(&task) != 0) {
-            LOG_DEBUG("Failed serving tcp client");
+            LOG_DEBUG("[TCP] Failed serving TCP client");
         };
     }
 }
@@ -240,7 +247,7 @@ void server(char *port) {
 
     // ignore SIGPIPE handler
     if (signal(SIGPIPE, SIG_IGN) != 0) {
-        LOG_DEBUG("Failed overwritting SIGPIPE handler");
+        LOG_ERROR("Failed overwritting SIGPIPE handler");
         LOG_ERROR("signal: %s", strerror(errno));
         exit(1);
     }
@@ -267,7 +274,7 @@ void server(char *port) {
         worker_threads[i].thread_nr = i;
         worker_threads[i].args = tasks_q;
         if (pthread_create(&worker_threads[i].tid, NULL, tcp_worker_thread_fn, (void *)&worker_threads[i]) != 0) {
-            LOG_ERROR("Failed launching worker nr %02d", i);
+            LOG_ERROR("Failed launching worker number %02d", i);
             exit(1);
         };
     }

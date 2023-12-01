@@ -7,13 +7,6 @@
 #include "udp.h"
 #include "udp_command_table.h"
 
-#define ERR_LIN_BAD_VALUES 1
-#define ERR_LOU_BAD_VALUES 2
-#define ERR_UNR_BAD_VALUES 3 
-#define ERR_LMA_BAD_VALUES 4
-#define ERR_MY_BIDS_BAD_UID 5
-#define ERR_SHOW_ERROR_BAD_AID 6
-
 struct udp_command_mappings {
     const char cmd_op[3];
     udp_handler_fn func;
@@ -59,7 +52,6 @@ int udp_command_table_entries = sizeof(udp_command_table) / sizeof(struct udp_co
 Get function handler for command
 */
 udp_handler_fn get_udp_handler_fn(char *cmd) {
-    LOG_DEBUG("entered get_handler_func");
     for (int i = 0; i < udp_command_table_entries; ++i) {
         if (strcmp(cmd, udp_command_table[i].cmd_op) == 0) {
             return udp_command_table[i].func;

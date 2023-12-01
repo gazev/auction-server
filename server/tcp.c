@@ -31,7 +31,7 @@ int serve_tcp_connection(struct tcp_client *client) {
 
     // set timeout for socket
     if (setsockopt(client->conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
-        LOG_DEBUG("%s:%d - Failed setting time out socket for client", client->ipv4, client->port);
+        LOG_ERROR("%s:%d - Failed setting time out socket for client", client->ipv4, client->port);
         LOG_ERROR("setsockopt: %s", strerror(errno));
         return -1;
     }
@@ -48,21 +48,29 @@ int serve_tcp_connection(struct tcp_client *client) {
         ssize_t read = recv(client->conn_fd, ptr + total_read, cmd_size - total_read, 0);
 
         if (read < 0) {
+            if (close(client->conn_fd) != 0) {
+                LOG_DEBUG("Failed closing client->conn_fd, resources might be leaking");
+                LOG_ERROR("close: %s", strerror(errno));
+            }
+
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                LOG_VERBOSE("Timed out client %s:%d", client->ipv4, client->port);
-                close(client->conn_fd);
-                return 0;
+                LOG_VERBOSE("%s:%d - Timed out client", client->ipv4, client->port);
+               return 0;
             } else {
+                LOG_DEBUG("%s:%d - Failed reading from socket", client->ipv4, client->port);
                 LOG_ERROR("recv: %s", strerror(errno));
-                LOG_DEBUG("Failed reading from socket. client %s:%d", client->ipv4, client->port);
-                close(client->conn_fd);
                 return -1;
             }
         }
 
         if (read == 0) {
-            LOG_VERBOSE("Connection closed by client %s:%d", client->ipv4, client->port);
-            close(client->conn_fd);
+            LOG_VERBOSE("%s:%d - Connection closed by client", client->ipv4, client->port);
+
+            if (close(client->conn_fd) != 0) {
+                LOG_DEBUG("Failed closing client->conn_fd, resources might be leaking");
+                LOG_ERROR("close: %s", strerror(errno));
+            }
+
             return 0;
         }
         
@@ -90,7 +98,10 @@ int serve_tcp_connection(struct tcp_client *client) {
         }
     }
 
-    close(client->conn_fd);
+    if (close(client->conn_fd) != 0) {
+        LOG_DEBUG("Failed closing client->conn_fd, resources might be leaking");
+        LOG_ERROR("close: %s", strerror(errno));
+    }
 
     return 0;
 }
@@ -104,8 +115,6 @@ int serve_tcp_connection(struct tcp_client *client) {
 * action should be taken to inform the client.
 */
 int handle_tcp_command(char *cmd, struct tcp_client *client) {
-    LOG_DEBUG("Entering handle_tcp_connection");
-
     /*
     * see tcp_command_table.h comment on tcp_handler_fn type definition to 
     * better understand how these handlers are expected to behave
@@ -113,18 +122,19 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
     tcp_handler_fn fn = get_tcp_handler_fn(cmd);
 
     if (fn == NULL) {
-        LOG_VERBOSE("%s:%d - Ignoring unknown command", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [TCP] Ignoring unknown command", client->ipv4, client->port);
         return -1;
     }
 
-    LOG_VERBOSE("Handling %s for %s:%d", cmd, client->ipv4, client->port);
+    LOG_VERBOSE("%s:%d - [TCP] Handling %s command", client->ipv4, client->port, cmd);
     // handler will proccedd with the protocol communication if the command payload 
     // is well behaved, if not it will return an error code to be communicated to the client 
     int err = fn(cmd, client);
     if (err) {
+        LOG_VERBOSE("%s:%d - [TPC] Badly formatted command", client->ipv4, client->port);
         char *err_msg = get_tcp_error_msg(err);
         if (send_tcp_response(err_msg, 8, client) != 0) {
-            LOG_DEBUG("%s:%d - Failed responding with error - %s - to client", client->ipv4, client->port, err_msg);
+            LOG_DEBUG("%s:%d - [TCP] Failed responding with error - %s - to client", client->ipv4, client->port, err_msg);
         }
     }
 
@@ -132,18 +142,18 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
 }
 
 int handle_open(char *cmd, struct tcp_client *client) {
-    // LOG_DEBUG("Entered handle_open")
+    LOG_DEBUG("%s:%d - [OPA] Entered handler", client->ipv4, client->port);
     char buff[128];
     // read uid and passwd
     int err = read_tcp_stream(buff, UID_SIZE + PASSWORD_SIZE + 3, client);
     if (err) { // time out or socket error
-        LOG_DEBUG("%s:%d - [OPA] Failed reading UID and password from TCP stream", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] Failed reading UID and password from TCP stream", client->ipv4, client->port);
         return 0;
     }
 
     // no delimiters after OPA and password
     if (buff[0] != ' ' || buff[UID_SIZE + PASSWORD_SIZE + 2] != ' ') {
-        LOG_DEBUG("%s:%d - [OPA] Bad formatted command", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] Badly formatted command", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
@@ -151,22 +161,22 @@ int handle_open(char *cmd, struct tcp_client *client) {
     char *passwd = strtok(NULL, " ");
 
     if (uid == NULL) {
-        LOG_DEBUG("%s:%d - [OPA] No UID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] No UID", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
     if (passwd == NULL) {
-        LOG_DEBUG("%s:%d - [OPA] No password", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] No password", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
     if (!is_valid_uid(uid)) {
-        LOG_DEBUG("%s:%d - [OPA] Invalid UID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] Invalid UID", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
     if (!is_valid_passwd(passwd)) {
-        LOG_DEBUG("%s:%d - [OPA] Invalid password", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] Invalid password", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
@@ -183,22 +193,22 @@ int handle_open(char *cmd, struct tcp_client *client) {
         ssize_t read = recv(client->conn_fd, ptr, 1, 0);
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                LOG_VERBOSE("%s:%d - Timed out client", client->ipv4, client->port);
+                LOG_VERBOSE("%s:%d - [OPA] Timed out client", client->ipv4, client->port);
             } else {
-                LOG_DEBUG("%s:%d - [OPA] Failed reading from socket", client->ipv4, client->port);
-                LOG_ERROR("%s:%d - [OPA] recv: %s", client->ipv4, client->port, strerror(errno));
+                LOG_VERBOSE("%s:%d - [OPA] Failed reading from socket", client->ipv4, client->port);
+                LOG_ERROR("%s:%d - recv: %s", client->ipv4, client->port, strerror(errno));
             }
             return 0;
         }
 
         if (read == 0) {
-            LOG_VERBOSE("%s:%d - Connection closed by client", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [OPA] Connection closed by client", client->ipv4, client->port);
             return 0;
         }
 
         curr_arg_len += read;
         if (curr_arg_len - 1 > get_opa_arg_len(argno)) {
-            LOG_DEBUG("%s:%d - [OPA] Invalid size for argumnet (argno: %d)", client->ipv4, client->port, argno);
+            LOG_VERBOSE("%s:%d - [OPA] Invalid size for argumnet (argno: %d)", client->ipv4, client->port, argno);
             return OPA_BAD_ARGS;
         }
 
@@ -207,7 +217,7 @@ int handle_open(char *cmd, struct tcp_client *client) {
             *ptr = '\0';
             // check if argument parsed is valid
             if (!is_valid_opa_arg(args_buff, argno)) {
-                LOG_DEBUG("%s:%d - [OPA] Invalid variable length argument (argno: %d)", client->ipv4, client->port, argno);
+                LOG_VERBOSE("%s:%d - [OPA] Invalid variable length argument (argno: %d)", client->ipv4, client->port, argno);
                 return OPA_BAD_ARGS;
             }
             // save arg
@@ -230,12 +240,12 @@ int handle_open(char *cmd, struct tcp_client *client) {
     long fsize = atol(args[4]);
     
     if (fsize <= 0 || fsize > 10000000) {
-        LOG_DEBUG("%s:%d - [OPA] Invalid fsize", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] Invalid fsize", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
     if (!exists_user(uid) || !is_user_logged_in(uid)) {
-        LOG_DEBUG("%s:%d - [OPA] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
+        LOG_VERBOSE("%s:%d - [OPA] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
         char *resp = "ROA NLG\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [OPA] Failed responding ROA NLG", client->ipv4, client->port);
@@ -244,7 +254,7 @@ int handle_open(char *cmd, struct tcp_client *client) {
     }
 
     if (!is_authentic_user(uid, passwd)) {
-        LOG_DEBUG("%s:%d - [OPA] Authentication failed for user %s", client->ipv4, client->port, uid);
+        LOG_VERBOSE("%s:%d - [OPA] Authentication failed for user %s", client->ipv4, client->port, uid);
         char *resp = "ROA NLG\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [OPA] Failed sending ROA NLG response", client->ipv4, client->port);
@@ -255,7 +265,7 @@ int handle_open(char *cmd, struct tcp_client *client) {
     // create new auction
     int auction_id = create_new_auction(uid, name, fname, sv, ta, fsize, client->conn_fd);
     if (auction_id == -1) {
-        LOG_DEBUG("%s:%d - [OPA] Failed creating new auction", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] Failed creating new auction", client->ipv4, client->port);
         char *resp = "ROA NOK\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [OPA] Failed sending ROA NOK response", client->ipv4, client->port);
@@ -270,18 +280,18 @@ int handle_open(char *cmd, struct tcp_client *client) {
         LOG_DEBUG("%s:%d - [OPA] Failed sending ROA OK response", client->ipv4, client->port);
     }
 
-    LOG_VERBOSE("%s:%d - Auction %03d created for user %s", client->ipv4, client->port, auction_id, uid);
+    LOG_VERBOSE("%s:%d - [OPA] Auction %03d created for user %s", client->ipv4, client->port, auction_id, uid);
 
     return 0;
 }
 
 int handle_close(char *cmd, struct tcp_client *client) {
-    LOG_DEBUG("%s:%d - Entered handle_close", client->ipv4, client->port);
+    LOG_DEBUG("%s:%d - [CLS] Entered handler", client->ipv4, client->port);
 
     char buff[UID_SIZE + PASSWORD_SIZE + AID_SIZE + 4];
     int err = read_tcp_stream(buff, UID_SIZE + PASSWORD_SIZE + AID_SIZE + 4, client);
     if (err) {
-        LOG_DEBUG("%s:%d - Failed reading from TCP stream", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] Failed reading from TCP stream", client->ipv4, client->port);
         return 0;
     }
 
@@ -289,7 +299,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
     * Validate message format
     */
     if (buff[0] != ' ' || buff[UID_SIZE + PASSWORD_SIZE + AID_SIZE + 3] != '\n') {
-        LOG_DEBUG("%s:%d - Bad formmated CLS command", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] Bad start and end characters for command", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
 
@@ -301,32 +311,32 @@ int handle_close(char *cmd, struct tcp_client *client) {
     char *aid = strtok(NULL, "\n");
 
     if (uid == NULL) {
-        LOG_DEBUG("%s:%d - [CLS] No UID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] No UID", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
 
     if (!is_valid_uid(uid)) {
-        LOG_DEBUG("%s:%d - [CLS] Invalid UID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] Invalid UID", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
 
     if (passwd == NULL) {
-        LOG_DEBUG("%s:%d - [CLS] No passwordd", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] No passwordd", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
 
     if (!is_valid_passwd(passwd)) {
-        LOG_DEBUG("%s:%d - [CLS] Invalid password", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] Invalid password", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
  
     if (aid == NULL) {
-        LOG_DEBUG("%s:%d - [CLS] No AID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] No AID", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
 
     if (!is_valid_aid(aid)) {
-        LOG_DEBUG("%s:%d - [CLS] Invalid AID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] Invalid AID", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
 
@@ -335,7 +345,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
     */
     // check user against db
     if (!exists_user(uid) || !is_user_logged_in(uid) || !is_authentic_user(uid, passwd)) {
-        LOG_DEBUG("%s:%d - [CLS] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
+        LOG_VERBOSE("%s:%d - [CLS] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
         char *resp = "RCL NLG\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
@@ -345,7 +355,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
 
     // check if auction exists
     if (!exists_auction(aid)) {
-        LOG_DEBUG("%s:%d - [CLS] Auction %s doesn't exist", client->ipv4, client->port, aid);
+        LOG_VERBOSE("%s:%d - [CLS] Auction %s doesn't exist", client->ipv4, client->port, aid);
         char *resp = "RCL EAU\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
@@ -356,7 +366,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
     // read auction information 
     char auction_info[256];
     if (get_auction_info(aid, auction_info, 256) != 0) {
-        LOG_DEBUG("%s:%d - [CLS] Failed retrieving information about action %s", client->ipv4, client->port, aid);
+        LOG_VERBOSE("%s:%d - [CLS] Failed retrieving information about action %s", client->ipv4, client->port, aid);
         char *resp = "RCL NOK\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
@@ -367,7 +377,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
     // check if user is the owner of desired auction
     char *owner_uid = strtok(auction_info, " ");
     if (strcmp(owner_uid, uid) != 0) {
-        LOG_DEBUG("%s:%d - [CLS] Auction %s doesn't exist", client->ipv4, client->port, aid);
+        LOG_VERBOSE("%s:%d - [CLS] Auction %s doesn't exist", client->ipv4, client->port, aid);
         char *resp = "RCL EOW\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
@@ -377,7 +387,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
 
     // check if auction is already finished
     if (is_auction_finished(aid)) {
-        LOG_DEBUG("%s:%d - [CLS] Auction %s has already finished", client->ipv4, client->port, aid);
+        LOG_VERBOSE("%s:%d - [CLS] Auction %s has already finished", client->ipv4, client->port, aid);
         char *resp = "RCL END\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
@@ -389,7 +399,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
     * Handle the CLS command 
     */
     if (close_auction(aid) != 0) {
-        LOG_DEBUG("%s:%d - [CLS] Auction %s couldn't be closed", client->ipv4, client->port, aid);
+        LOG_VERBOSE("%s:%d - [CLS] Auction %s couldn't be closed", client->ipv4, client->port, aid);
         char *resp = "RCL NOK\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
@@ -409,34 +419,34 @@ int handle_close(char *cmd, struct tcp_client *client) {
 }
 
 int handle_show_asset(char *cmd, struct tcp_client *client) {
-    LOG_DEBUG("Entered handle_show_asset");
+    LOG_DEBUG("%s:%d - [SAS] Entered handler", client->ipv4, client->port);
 
     char buff[AID_SIZE + 2];
     int err = read_tcp_stream(buff, AID_SIZE + 2, client);
     if (err) {
-        LOG_DEBUG("%s:%d - [SAS] Failed reading from TCP stream", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [SAS] Failed reading AID from TCP stream", client->ipv4, client->port);
         return 0;
     }
 
     if (buff[0] != ' ' || buff[AID_SIZE + 1] != '\n') {
-        LOG_DEBUG("%s:%d - [SAS] Bad formatted SAS command", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [SAS] Bad formatted SAS command", client->ipv4, client->port);
         return SAS_BAD_ARGS;
     }
 
     char *aid = strtok(buff + 1, "\n"); // ignore white space
 
     if (aid == NULL) {
-        LOG_DEBUG("%s:%d - [SAS] No AID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [SAS] No AID", client->ipv4, client->port);
         return SAS_BAD_ARGS;
     }
 
     if (!is_valid_aid(aid)) {
-        LOG_DEBUG("%s:%d - [SAS] Invalid AID", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [SAS] Invalid AID", client->ipv4, client->port);
         return SAS_BAD_ARGS;
     }
 
     if (!exists_auction(aid)) {
-        LOG_DEBUG("%s:%d - [SAS] Auction doesn't exist", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [SAS] Auction doesn't exist", client->ipv4, client->port);
         char *resp = "RSA NOK\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [SAS] Failed sending RSA NOK response", client->ipv4, client->port);
@@ -446,7 +456,7 @@ int handle_show_asset(char *cmd, struct tcp_client *client) {
 
     char auction_info[256];
     if (get_auction_info(aid, auction_info, 256) != 0) {
-        LOG_DEBUG("%s:%d - [SAS] Failed retrieving %3s auction information", client->ipv4, client->port, aid);
+        LOG_VERBOSE("%s:%d - [SAS] Failed retrieving %3s auction information", client->ipv4, client->port, aid);
         char *resp = "RSA NOK\n"; 
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [SAS] Failed sending RSA NOK response", client->ipv4, client->port);
@@ -516,13 +526,13 @@ int handle_show_asset(char *cmd, struct tcp_client *client) {
 
     close(afd);
 
-    LOG_VERBOSE("%s:%d - Served asset %s", client->ipv4, client->port, aid);
+    LOG_VERBOSE("%s:%d - [SAS] Served asset %s", client->ipv4, client->port, aid);
 
     return 0;
 }
 
 int handle_bid(char *cmd, struct tcp_client *client) {
-    LOG_DEBUG("%s:%d - [BID] Entered handle_bid", client->ipv4, client->port);
+    LOG_DEBUG("%s:%d - [BID] Entered handler", client->ipv4, client->port);
     return 0;
 }
 
