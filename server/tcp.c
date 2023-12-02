@@ -41,7 +41,7 @@ int serve_tcp_connection(struct tcp_client *client) {
     */
     char cmd_buffer[8];
     char *ptr = cmd_buffer;
-    int cmd_size = 3; // command size
+    int cmd_size = 4; // command size
     int total_read = 0;
     // read protocol operation 
     while (total_read < cmd_size) {
@@ -115,6 +115,14 @@ int serve_tcp_connection(struct tcp_client *client) {
 * action should be taken to inform the client.
 */
 int handle_tcp_command(char *cmd, struct tcp_client *client) {
+    // terminate cmd string
+    if (cmd[3] != ' ') {
+        LOG_VERBOSE("%s:%d - [TCP] Ignoring unknown command", client->ipv4, client->port);
+        return -1;
+    }
+
+    cmd[3] = '\0';
+
     /*
     * see tcp_command_table.h comment on tcp_handler_fn type definition to 
     * better understand how these handlers are expected to behave
@@ -145,14 +153,14 @@ int handle_open(char *cmd, struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [OPA] Entered handler", client->ipv4, client->port);
     char buff[128];
     // read uid and passwd
-    int err = read_tcp_stream(buff, UID_SIZE + PASSWORD_SIZE + 3, client);
+    int err = read_tcp_stream(buff, UID_SIZE + 1 + PASSWORD_SIZE + 1, client);
     if (err) { // time out or socket error
         LOG_VERBOSE("%s:%d - [OPA] Failed reading UID and password from TCP stream", client->ipv4, client->port);
         return 0;
     }
 
     // no delimiters after OPA and password
-    if (buff[0] != ' ' || buff[UID_SIZE + PASSWORD_SIZE + 2] != ' ') {
+    if (buff[UID_SIZE + PASSWORD_SIZE + 1] != ' ') {
         LOG_VERBOSE("%s:%d - [OPA] Badly formatted command", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
@@ -288,8 +296,8 @@ int handle_open(char *cmd, struct tcp_client *client) {
 int handle_close(char *cmd, struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [CLS] Entered handler", client->ipv4, client->port);
 
-    char buff[UID_SIZE + PASSWORD_SIZE + AID_SIZE + 4];
-    int err = read_tcp_stream(buff, UID_SIZE + PASSWORD_SIZE + AID_SIZE + 4, client);
+    char buff[128];
+    int err = read_tcp_stream(buff, UID_SIZE + 1 + PASSWORD_SIZE + 1 + AID_SIZE + 1, client);
     if (err) {
         LOG_VERBOSE("%s:%d - [CLS] Failed reading from TCP stream", client->ipv4, client->port);
         return 0;
@@ -298,8 +306,8 @@ int handle_close(char *cmd, struct tcp_client *client) {
     /**
     * Validate message format
     */
-    if (buff[0] != ' ' || buff[UID_SIZE + PASSWORD_SIZE + AID_SIZE + 3] != '\n') {
-        LOG_VERBOSE("%s:%d - [CLS] Bad start and end characters for command", client->ipv4, client->port);
+    if (buff[UID_SIZE + PASSWORD_SIZE + AID_SIZE + 2] != '\n') {
+        LOG_VERBOSE("%s:%d - [CLS] Bad end token for command", client->ipv4, client->port);
         return CLS_BAD_ARGS;
     }
 
@@ -421,19 +429,19 @@ int handle_close(char *cmd, struct tcp_client *client) {
 int handle_show_asset(char *cmd, struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [SAS] Entered handler", client->ipv4, client->port);
 
-    char buff[AID_SIZE + 2];
-    int err = read_tcp_stream(buff, AID_SIZE + 2, client);
+    char buff[8];
+    int err = read_tcp_stream(buff, AID_SIZE + 1, client);
     if (err) {
         LOG_VERBOSE("%s:%d - [SAS] Failed reading AID from TCP stream", client->ipv4, client->port);
         return 0;
     }
 
-    if (buff[0] != ' ' || buff[AID_SIZE + 1] != '\n') {
-        LOG_VERBOSE("%s:%d - [SAS] Bad formatted SAS command", client->ipv4, client->port);
+    if (buff[AID_SIZE] != '\n') {
+        LOG_VERBOSE("%s:%d - [SAS] Bad end token", client->ipv4, client->port);
         return SAS_BAD_ARGS;
     }
 
-    char *aid = strtok(buff + 1, "\n"); // ignore white space
+    char *aid = strtok(buff, "\n");
 
     if (aid == NULL) {
         LOG_VERBOSE("%s:%d - [SAS] No AID", client->ipv4, client->port);
@@ -505,26 +513,39 @@ int handle_show_asset(char *cmd, struct tcp_client *client) {
         return 0;
     }
 
-    long size = st.st_size;
+    long fsize = st.st_size;
 
     /**
-    * Send response
+    * Send the asset 
     */
     // send info
     char resp_info[128];
-    sprintf(resp_info, "RSA OK %s %ld ", asset_fname, size);
+    sprintf(resp_info, "RSA OK %s %ld ", asset_fname, fsize);
     if (send_tcp_response(resp_info, strlen(resp_info), client) != 0) {
         close(afd);
         LOG_DEBUG("%s:%d - [SAS] Failed sending RSA OK response", client->ipv4, client->port);
         return 0;
     }
 
-    // send file
-    if (sendfile(client->conn_fd, afd, 0, size) != 0) {
-        LOG_DEBUG("%s:%d - [SAS] Failed RSA sending asset file", client->ipv4, client->port);
+    int total_sent = 0;    
+    int sent;
+    off_t offset = 0;
+    while (total_sent < fsize) {
+        if ((sent = sendfile(client->conn_fd, afd, &offset, fsize - total_sent)) < 0) {
+            LOG_DEBUG("%s:%d - [SAS] Failed RSA sending asset file", client->ipv4, client->port);
+            return 0;
+        }
+        total_sent += sent;
     }
 
-    close(afd);
+    if (send_tcp_response("\n", 1, client) != 0) {
+        LOG_DEBUG("%s:%d - [SAS] Failed sending message terminating LF token", client->ipv4, client->port);
+    }
+
+    if (close(afd) != 0) {
+        LOG_DEBUG("%s:%d - [SAS] Failed closing asset file descriptor, resources might be leaking", client->ipv4, client->port);
+        LOG_ERROR("close: %s", strerror(errno));
+    };
 
     LOG_VERBOSE("%s:%d - [SAS] Served asset %s", client->ipv4, client->port, aid);
 
