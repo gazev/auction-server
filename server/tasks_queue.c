@@ -6,7 +6,7 @@
 #include "tasks_queue.h"
 
 struct tasks_queue {
-    task_t tasks[THREAD_POOL_SIZE];
+    task_t tasks[100];
     size_t size;
     int head;
     int tail;
@@ -65,8 +65,6 @@ int destroy_queue(tasks_queue *q) {
     return 0;
 }
 
-
-
 /**
 * Enqueue an item into the queue. If an error occurs -1 is returned else, 0 is
 * returned.
@@ -77,7 +75,7 @@ int enqueue(tasks_queue *q, task_t *task) {
         return -1;
     }
 
-    while (q->size == THREAD_POOL_SIZE) {
+    while (q->size == 100) {
         printf("PRODUCER WAITING");
         if (pthread_cond_wait(&q->not_full, &q->mutex) != 0) {
             perror("pthread_cond_wait");
@@ -86,7 +84,7 @@ int enqueue(tasks_queue *q, task_t *task) {
     }
 
     memcpy(&q->tasks[q->head], task, sizeof(task_t));
-    q->head = (q->head + 1) % THREAD_POOL_SIZE;
+    q->head = (q->head + 1) % 100;
     q->size++;
 
     if (pthread_mutex_unlock(&q->mutex) != 0) {
@@ -119,7 +117,7 @@ int dequeue(tasks_queue *q, task_t *arg) {
     }
 
     memcpy(arg, &q->tasks[q->tail], sizeof (task_t));
-    q->tail = (q->tail + 1) % THREAD_POOL_SIZE;
+    q->tail = (q->tail + 1) % 100;
     q->size--;
 
     if (pthread_mutex_unlock(&q->mutex) != 0) {

@@ -15,8 +15,6 @@
 #include "../utils/validators.h"
 
 #include "client.h"
-#include "command_table.h"
-#include "parser.h"
 /**
 Print program's help message
 */

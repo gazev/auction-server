@@ -4,7 +4,6 @@
 #include <string.h>
 
 #include "client.h"
-#include "parser.h"
 
 #define MAX_LOGIN_COMMAND 20
 #define MAX_LOGIN_RESPONSE 8
@@ -27,17 +26,19 @@
 int send_udp_request(char *, size_t, struct client_state *);
 int receive_udp_response(char *, size_t, struct client_state *);
 
-int handle_login(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_logout(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_unregister(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_exit(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_open(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_close(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_my_auctions(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_my_bids(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_list(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_show_asset(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_bid(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
-int handle_show_record(struct arg *, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_cmd(char *input, struct client_state *, char *response);
+
+int handle_login(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_logout(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_unregister(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_exit(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_open(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_close(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_my_auctions(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_my_bids(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_list(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_show_asset(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_bid(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
+int handle_show_record(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
 
 #endif

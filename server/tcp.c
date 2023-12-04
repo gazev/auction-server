@@ -137,7 +137,7 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
     LOG_VERBOSE("%s:%d - [TCP] Handling %s command", client->ipv4, client->port, cmd);
     // handler will proccedd with the protocol communication if the command payload 
     // is well behaved, if not it will return an error code to be communicated to the client 
-    int err = fn(cmd, client);
+    int err = fn(client);
     if (err) {
         LOG_VERBOSE("%s:%d - [TPC] Badly formatted command", client->ipv4, client->port);
         char *err_msg = get_tcp_error_msg(err);
@@ -149,7 +149,7 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
     return 0;
 }
 
-int handle_open(char *cmd, struct tcp_client *client) {
+int handle_open(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [OPA] Entered handler", client->ipv4, client->port);
     char buff[128];
     // read uid and passwd
@@ -293,7 +293,7 @@ int handle_open(char *cmd, struct tcp_client *client) {
     return 0;
 }
 
-int handle_close(char *cmd, struct tcp_client *client) {
+int handle_close(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [CLS] Entered handler", client->ipv4, client->port);
 
     char buff[128];
@@ -385,7 +385,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
     // check if user is the owner of desired auction
     char *owner_uid = strtok(auction_info, " ");
     if (strcmp(owner_uid, uid) != 0) {
-        LOG_VERBOSE("%s:%d - [CLS] Auction %s doesn't exist", client->ipv4, client->port, aid);
+        LOG_VERBOSE("%s:%d - [CLS] Invalid owner for auction %s", client->ipv4, client->port, aid);
         char *resp = "RCL EOW\n";
         if (send_tcp_response(resp, 8, client) != 0) {
             LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
@@ -426,7 +426,7 @@ int handle_close(char *cmd, struct tcp_client *client) {
     return 0;
 }
 
-int handle_show_asset(char *cmd, struct tcp_client *client) {
+int handle_show_asset(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [SAS] Entered handler", client->ipv4, client->port);
 
     char buff[8];
@@ -552,7 +552,7 @@ int handle_show_asset(char *cmd, struct tcp_client *client) {
     return 0;
 }
 
-int handle_bid(char *cmd, struct tcp_client *client) {
+int handle_bid(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [BID] Entered handler", client->ipv4, client->port);
     return 0;
 }

@@ -10,28 +10,8 @@
 #include "../utils/logging.h"
 
 #include "client.h"
-#include "parser.h"
+#include "handlers.h"
 #include "command_table.h"
-#include "command_error.h"
-
-/**
-Handles command passed as argument.
-Returns 0 if command is successfully executed and -1 if an error occurs
-*/
-int handle_cmd(struct command *cmd, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
-    if (cmd->op == NULL) {
-        return 0;
-    }
-
-    handler_func fn = get_handler_func(cmd->op);
-
-    if (fn == NULL) {
-        snprintf(response, MAX_COMMAND_SIZE, "Unknown command %s", cmd->op);
-        return 0;
-    }
-
-    return fn(cmd->args, client, response);
-}
 
 
 /**
@@ -42,12 +22,13 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
     struct addrinfo hints, *req;
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
+    hints.ai_family   = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = 0;
 
     int err = getaddrinfo(ip, port, &hints, &req);
     if (err) {
+        LOG_DEBUG("Failed getting adress IP");
         if (err == EAI_SYSTEM) {
             LOG_ERROR("getaddrinfo: %s", strerror(errno));
         } else {
@@ -81,41 +62,38 @@ void free_client(struct client_state *client) {
 // int send_message(char *message, )
 
 void run_client(char *ip, char *port) {
-    LOG_DEBUG("entered run_client")
     struct client_state client;
 
     if (initialize_client(ip, port, &client) != 0) {
-        LOG_DEBUG("failed client_state init")
-        LOG_ERROR("Failed initializing client connection");
+        LOG_ERROR("Failed initializing client")
         exit(1);
     }
 
-    char input[MAX_COMMAND_SIZE];
-    while (fgets(input, sizeof(input), stdin)) {
+    // DISPLAY_CLIENT("\033[2J");
+    DISPLAY_CLIENT("--- Welcome to the AS client! ---")
+    char user_input[1024];
+    char response[MAX_SERVER_RESPONSE];
+    while (fgets(user_input, 1024, stdin)) {
         // used to replace terminating '\n' with '\0'
-        int endl_idx = strcspn(input, "\n");
+        int endl_idx = strcspn(user_input, "\n");
 
-        // warn user if input is too large and clean stdin unread buffer
-        if (input[endl_idx] != '\n') {
-            LOG_WARN("too large input, truncating");
+        if (user_input[endl_idx] != '\n') {
+            LOG("Command too large!")
+            continue;
             clean_stdin_buffer();
         }
 
         // replace last '\n' with '\0' (or truncate)
-        input[endl_idx] = '\0';
+        user_input[endl_idx] = '\0';
 
-        struct command *cmd = parse_command(input);
-        char response[MAX_SERVER_RESPONSE];
-
-        int err = handle_cmd(cmd, &client, response);
+        int err = handle_cmd(user_input, &client, response);
         if (err) {
             DISPLAY_CLIENT("%s", get_error_msg(err))
-        }
-        else {
-            DISPLAY_CLIENT("%s", response);
+            continue;
         }
 
-        free_command(cmd);
+        DISPLAY_CLIENT("%s", response);
+
     }
 }
 

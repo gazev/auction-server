@@ -15,7 +15,7 @@
 * If the command payload is valid, the handler function should perform the 
 * issued command and complete the protocol communication with the client.
 */
-typedef int (*tcp_handler_fn)(char *cmd, struct tcp_client *);
+typedef int (*tcp_handler_fn)(struct tcp_client *);
 
 tcp_handler_fn get_tcp_handler_fn(char *cmd);
 char *get_tcp_error_msg(int errcode);

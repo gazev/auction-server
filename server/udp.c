@@ -263,7 +263,8 @@ int handle_unregister(char *input, struct udp_client *client, char *response, si
 
 int handle_my_auctions(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [LMA] Entered handler", client->ipv4, client->port);
-    char *uid = strtok(NULL, " ");
+    update_database();
+    char *uid = strtok(NULL, "\n");
 
     if (uid == NULL) {
         LOG_VERBOSE("%s:%d - [LMA] No UID supplied", client->ipv4, client->port);
@@ -316,11 +317,13 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
 
 int handle_my_bids(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_my_bids");
+    update_database();
     return 0;
 }
 
 int handle_list(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [LST] Entered handler", client->ipv4, client->port);
+    update_database();
 
     // get auctions list
     sprintf(response, "RLS OK");

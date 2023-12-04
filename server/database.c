@@ -93,6 +93,127 @@ int load_db_state() {
     return 0;
 }
 
+int update_database() {
+    LOG_DEBUG("[DB] Updating database");
+    lock_db_mutex("update");
+
+    struct dirent **entries;
+    int n_entries = scandir("AUCTIONS", &entries, NULL, NULL);
+    if (n_entries < 0) {
+        LOG_DEBUG("[DB] Failed retrieving user auctions");
+        LOG_ERROR("[DB] scandir: %s", strerror(errno));
+        unlock_db_mutex("list");
+        return -1;
+    }
+
+    /** 
+    * Iteratively check if each auction has already ended
+    */
+    for (int i = 0; i < n_entries; i++) {
+        if (entries[i]->d_name[0] == '.') continue;
+
+        char bid_path[32];
+        sprintf(bid_path, "AUCTIONS/%.3s/END_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
+        int end_fd;
+        // bid has already ended, continue
+        if ((end_fd = open(bid_path, O_RDONLY)) > 0) {
+            if (close(end_fd) != 0) {
+                LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
+                LOG_ERROR("[DB] close: %s", strerror(errno));
+            }
+            continue;
+        }
+
+        /**
+        * Get information from START file
+        */
+        FILE *fp;
+        sprintf(bid_path, "AUCTIONS/%.3s/START_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
+        if ((fp = fopen(bid_path, "r")) == NULL) {
+            LOG_DEBUG("[DB] Failed opening bid information file");
+            LOG_ERROR("[DB] fopen: %s", strerror(errno));
+        }
+
+        char bid_info[128];
+        fgets(bid_info, 128, fp);
+        fclose(fp);
+
+        // read auction start time and end time 
+        char *time_active;
+        char *start_time;
+
+        strtok(bid_info, " ");    
+        for (int i = 0; i < 4; i++) {
+            time_active = strtok(NULL, " ");    
+        }
+
+        for (int i = 0; i < 3; ++i) {
+            start_time = strtok(NULL, " ");
+        }
+
+        if (time_active == NULL || start_time == NULL) {
+            LOG_DEBUG("Got invaild time active and start time from bid file %s", entries[i]->d_name);
+            continue;
+        }
+
+        long time_active_int = atol(time_active);
+        long start_time_l = atol(start_time);
+        if (time_active_int == 0 || start_time_l == 0) {
+            LOG_DEBUG("Got invaild time active and start time from bid file %s", entries[i]->d_name);
+            continue;
+        }
+
+        long curr_time = time(NULL);
+        /** Check for auction expiration, if not expired, continue*/
+        if (curr_time - start_time_l < time_active_int) {
+            continue;
+        }
+
+        /** 
+        * If auction expired, create END file and write to it the date time of 
+        * the auction end and the time in seconds it remained active
+        */
+        int close_fd;
+        sprintf(bid_path, "AUCTIONS/%.3s/END_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
+        if ((close_fd = open(bid_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
+            LOG_DEBUG("[DB] Failed creating END_%.3s.txt file", entries[i]->d_name);
+            LOG_ERROR("[DB] open: %s", strerror(errno));
+            continue;
+        }
+
+        if (close(close_fd) != 0) {
+            LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
+            LOG_ERROR("[DB] close: %s", strerror(errno));
+        }
+
+        if ((fp = fopen(bid_path, "w")) == NULL) {
+            LOG_DEBUG("[DB] Failed opening bid end information file");
+            LOG_ERROR("[DB] fopen: %s", strerror(errno));
+        }
+
+        struct tm *tm_time;
+        if ((tm_time = gmtime(&curr_time)) == NULL) {
+            LOG_DEBUG("[DB] Couldn't get current time information")
+            fclose(fp);
+            continue;
+        }
+
+        char time_str[128];
+
+        sprintf(time_str, "%4d-%02d-%02d %02d:%02d:%02d", 
+                    tm_time->tm_year + 1900, tm_time->tm_mon + 1, tm_time->tm_mday,
+                    tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
+
+        char end_info[256];
+        sprintf(end_info, "%s %ld\n", time_str, curr_time - start_time_l);
+
+        fputs(end_info, fp);
+        fclose(fp);
+    }
+
+    unlock_db_mutex("list");
+    return 0;
+}
 /**
 * Check if user is registred in DB 
 */
@@ -762,13 +883,24 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
 
 int close_auction(char *aid) {
     lock_db_mutex(aid);
+    
+    FILE *fp;
+    char auction_path[128];
+    sprintf(auction_path, "AUCTIONS/%3s/START_%3s.txt", aid, aid);
+    if ((fp = fopen(auction_path, "r")) == NULL) {
+        LOG_ERROR("[DB] Failed reading from auction %s information file, databsae might be corrupted", aid);
+        unlock_db_mutex(aid);
+        return 1;
+    }
 
     char auction_info[256];
-    if (get_auction_info(aid, auction_info, 256) != 0) {
-        LOG_DEBUG("[DB] Failed setting auction %s information", aid);
+    if (fgets(auction_info, 128, fp) == NULL) {
+        LOG_ERROR("[DB] Failed reading from auction %s information file, database might be corrupted", aid);
         unlock_db_mutex(aid);
-        return -1;
-    }
+        return 1;
+    };
+
+    fclose(fp);
 
     /**
     * Calculate the time the auction remained active
@@ -838,7 +970,6 @@ int close_auction(char *aid) {
     */
     char end_data[258];
     sprintf(end_data, "%s %ld", end_datetime, end_sec_time);
-    FILE *fp;
     if ((fp = fopen(end_file_path, "w")) == NULL) {
         LOG_DEBUG("[DB] Failed writting information to auction %s END file", aid);
         unlock_db_mutex(aid);

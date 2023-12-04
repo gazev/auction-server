@@ -41,4 +41,4 @@ user: $(UTILS_OBJECTS) $(CLIENT_OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
-	-rm -rf db $(TARGET_EXECS) $(SERVER_OBJECTS) $(CLIENT_OBJECTS) $(UTILS_OBJECTS) 2> /dev/null || true
+	-rm -rf ASDIR $(TARGET_EXECS) $(SERVER_OBJECTS) $(CLIENT_OBJECTS) $(UTILS_OBJECTS) 2> /dev/null || true

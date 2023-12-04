@@ -2,11 +2,12 @@
 #define __DATABASE_H__
 
 int init_database();
-int exists_user(char *uid);
+int update_database();
 
 /**
 * DB status API 
 */
+int exists_user(char *uid);
 int is_authentic_user(char *uid, char *passwd);
 int is_user_logged_in(char *uid);
 

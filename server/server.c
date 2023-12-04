@@ -208,7 +208,6 @@ void *tcp_server_thread_fn(void *thread_v) {
                 LOG_DEBUG("[TPC] Failed closing tcp_client.conn_fd");
                 LOG_ERROR("[TCP] close: %s", strerror(errno));
             };
-            continue;
         }
     }
 }
