@@ -20,8 +20,8 @@ struct error_mappings {
 
 
 // maps the command string to the their respective function handler 
-const 
 static 
+const 
 struct command_mappings command_table[] = {
     {"login", handle_login},
     {"logout", handle_logout},
@@ -50,8 +50,8 @@ struct command_mappings command_table[] = {
 
 // maps error codes (ints) of command handlers to the corresponding error message. 
 // used by get_err_message(errcode)
-const 
 static 
+const
 struct error_mappings error_lookup_table[] = {
     {ERR_TIMEDOUT_UDP, "Timed out waiting for server UDP response\n"},
     {ERR_REQUESTING_UDP, "Failed sending UDP request to server\n"},
@@ -78,12 +78,12 @@ struct error_mappings error_lookup_table[] = {
     {ERR_INVALID_COMMAND, "Invalid command, type `help` for more information\n"},
 };
 
-const 
 static 
+const 
 int error_lookup_entries = sizeof(error_lookup_table) / sizeof(struct error_mappings); 
 
-const 
 static 
+const 
 int command_table_entries = sizeof(command_table) / sizeof(struct command_mappings);
 
 char *get_error_msg(int errcode) {

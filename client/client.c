@@ -16,7 +16,7 @@
 
 
 /**
-Still needs to be discussed
+* Initialize client state structure
 */
 int initialize_client(char *ip, char *port, struct client_state *client) {
     int sock_fd;
@@ -60,8 +60,9 @@ void free_client(struct client_state *client) {
     free(client->as_addr);
 }
 
-// int send_message(char *message, )
-
+/**
+* Main client event loop
+*/
 void run_client(char *ip, char *port) {
     struct client_state client;
 
@@ -75,15 +76,14 @@ void run_client(char *ip, char *port) {
         LOG_ERROR("signal: %s", strerror(errno));
     }
 
-    DISPLAY_CLIENT("--- Welcome to the AS client! ---\n");
     char user_input[1024];
     char response[MAX_SERVER_RESPONSE];
+    DISPLAY_CLIENT("--- Welcome to the AS client! ---\n");
     while (fgets(user_input, 1024, stdin)) {
-        // used to replace terminating '\n' with '\0'
         int endl_idx = strcspn(user_input, "\n");
 
         if (user_input[endl_idx] != '\n') {
-            LOG("Command too large!")
+            DISPLAY_CLIENT("Command too large!\n");
             clean_stdin_buffer();
             continue;
         }

@@ -9,18 +9,25 @@
 #include "../utils/validators.h"
 
 #include "command_table.h"
-/*--------------------------------- LOGIN --------------------------------------*/
 
 int send_udp_request(char *buff, size_t size, struct client_state *);
 int receive_udp_response(char *buff, size_t size, struct client_state *);
 
+/**
+* Requests the AS to log in a user.
+* Returns 0 if successfully communicated with server and writes result message to `response`.
+* Returns an error code if the operation cannot be concluded or if the server responds with
+* an invalid protocol message
+*/
 int handle_login (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("Entered");
     if (client->logged_in)
         return ERR_ALREADY_LOGGED_IN;
 
+    /**
+    * Validate command arguments 
+    */
     char *uid = strtok(input, " ");
-
     if (uid == NULL)
         return ERR_NULL_ARGS;
 
@@ -28,21 +35,26 @@ int handle_login (char *input, struct client_state *client, char response[MAX_SE
         return ERR_INVALID_UID;
 
     char *passwd = strtok(NULL, " "); 
-
     if (passwd == NULL)
         return ERR_NULL_ARGS;
 
     if (!is_valid_passwd(passwd))
         return ERR_INVALID_PASSWD;
 
-    // create protocol message format: LIN UID password
-    char message[64];
+    /**
+    * Create and send protocol message
+    * Format: LIN UID password
+    */
+    char message[32];
     sprintf(message, "LIN %.6s %.8s\n", uid, passwd);
 
-   // communicate with the server
     if (send_udp_request(message, strlen(message), client) != 0)
         return ERR_REQUESTING_UDP;
 
+    /**
+    * Receive and validate server response
+    * Expected format: RLI status
+    **/
     char buffer[32];
     int err = receive_udp_response(buffer, 32, client);
     if (err < 0) {
@@ -52,22 +64,19 @@ int handle_login (char *input, struct client_state *client, char response[MAX_SE
         return ERR_RECEIVING_UDP;
     }
 
-    /**
-    * Check response
-    */
-    if (!strcmp(buffer, "RLI OK\n")){
-        memcpy(client->uid, uid, UID_SIZE);
-        memcpy(client->passwd, passwd, PASSWORD_SIZE);
-        client->logged_in = 1;
-        strcpy(response, "Successful login\n");
+    // ERR, the request was invalid, this means the client is broken
+    if (!strcmp(buffer, "RLI ERR\n")) {
+        strcpy(response, "Server returned an error status\n");
         return 0;
     }
 
+    // NOK, user failed authentication 
     if (!strcmp(buffer, "RLI NOK\n")){
         strcpy(response, "Incorrect login attempt\n");
         return 0;
     }
 
+    // REG, user registred
     if (!strcmp(buffer, "RLI REG\n")){
         memcpy(client->uid, uid, UID_SIZE);
         memcpy(client->passwd, passwd, PASSWORD_SIZE);
@@ -76,26 +85,47 @@ int handle_login (char *input, struct client_state *client, char response[MAX_SE
         return 0;
     }
 
+    // OK, user was logged in 
+    if (!strcmp(buffer, "RLI OK\n")){
+        memcpy(client->uid, uid, UID_SIZE);
+        memcpy(client->passwd, passwd, PASSWORD_SIZE);
+        client->logged_in = 1;
+        strcpy(response, "Successful login\n");
+        return 0;
+    }
+
+    // if none of the above either the client or server are broken (or both!) 
     return ERR_UNKNOWN_ANSWER;
 }
 
-/*--------------------------------- LOGOUT -------------------------------------*/
 
+/**
+* Requests the AS to logout the current client user.
+* Returns 0 if successfully communicated with server and writes result to `response`.
+* Returns an error code if the operation cannot be concluded or if the server responds with
+* an invalid protocol message
+*/
 int handle_logout (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("Entered");
     if (!client->logged_in)
         return ERR_NOT_LOGGED_IN;
 
-    // create protocol message format: LOU UID password
-    char message[128];
+    /**
+    * Create and send protocol message
+    * Format: LOU UID password
+    */
+    char message[32];
     sprintf(message, "LOU %.6s %.8s\n", client->uid, client->passwd);
 
-    // communicate with the server
     if (send_udp_request(message, strlen(message), client) != 0)
         return ERR_REQUESTING_UDP;
 
-    char buffer[128];
-    int err = receive_udp_response(buffer, 128, client);
+    /**
+    * Receive and validate server response
+    * Expected format: RLO status
+    **/
+    char buffer[32];
+    int err = receive_udp_response(buffer, 32, client);
     if (err < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return ERR_TIMEDOUT_UDP;
@@ -103,72 +133,111 @@ int handle_logout (char *input, struct client_state *client, char response[MAX_S
         return ERR_RECEIVING_UDP;
     }
 
-    // check result
+    // ERR, the request was invalid, this means the client is broken
+    if (!strcmp(buffer, "RLO ERR\n")) {
+        strcpy(response, "Server returned an error status\n");
+        return 0;
+    }
+
+    // NOK, the user was not logged in
+    // note: the specification of the client + server make this an edge case
+    // that should never happen with this client (if the server doesn't log us out mid usage)
+    if (strcmp(buffer, "RLO NOK\n") == 0) {
+        strcpy(response, "User not logged in\n");
+        return 0;
+    }
+
+    // UNR, the user is not registred
+    if (strcmp(buffer, "RLO UNR\n") == 0) {
+        strcpy(response, "Unknown user\n");
+        return 0;
+    }
+
+    // OK, the user was logged out
     if (strcmp(buffer, "RLO OK\n") == 0) {
         client->logged_in = 0;
         strcpy(response, "Successful logout\n");
         return 0;
     }
 
-    if (strcmp(buffer, "RLO NOK\n") == 0) {
-        strcpy(response, "User not logged in\n");
-        return 0;
-    }
-
-    if (strcmp(buffer, "RLO UNR\n") == 0) {
-        strcpy(response, "Unknown user\n");
-        return 0;
-    }
-
+    // if none of the above either the client or server are broken (or both!) 
     return ERR_UNKNOWN_ANSWER;
 }
 
-/*--------------------------------- UNREGISTER ---------------------------------*/
 
+/**
+* Requests the AS to unregister the current client user.
+* Returns 0 if successfully communicated with server and writes result to `response`.
+* Returns an error code if the operation cannot be concluded or if the server responds with
+* an invalid protocol message
+*/
 int handle_unregister (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("Entered");
     if (!client->logged_in)
         return ERR_NOT_LOGGED_IN;
 
-    // create protocol message format: UNR UID password
-    char message[128];
+    /**
+    * Create and send protocol message
+    * Format: UNR UID password
+    */
+    char message[32];
     sprintf(message, "UNR %.6s %.8s\n", client->uid, client->passwd);
 
-    // communicate with the server
     if (send_udp_request(message, strlen(message), client) != 0)
         return ERR_REQUESTING_UDP;
 
-    char buffer[128];
-    int err = receive_udp_response(buffer, 128, client);
+    /**
+    * Receive and validate server response
+    * Expected format: RUR status
+    **/
+    char buffer[32];
+    int err = receive_udp_response(buffer, 32, client);
     if (err < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return ERR_TIMEDOUT_UDP;
         }
         return ERR_RECEIVING_UDP;
     }
-    
-    // check result
+
+    // ERR, the request was invalid, this means the client is broken
+    if (!strcmp(buffer, "RLO ERR\n")) {
+        strcpy(response, "Server returned an error status\n");
+        return 0;
+    }
+
+    // UNR, the user was not registered
+    // note: the specification of the client + server make this an edge case
+    // that should never happen with this client (if the server doesn't unregister us mid usage)
+    if (!strcmp(buffer, "RUR UNR\n")) {
+        strcpy(response, "Unknown user\n");
+        return 0;
+    }
+
+    // NOK, the user was not logged in
+    // note: the specification of the client + server make this an edge case
+    // that should never happen with this client (if the server doesn't unregister us mid usage)
+    if (!strcmp(buffer, "RUR NOK\n")) {
+        strcpy(response, "Incorrect unregister attempt\n");
+        return 0;
+    }
+
+    // OK, user was unregistered 
     if (!strcmp(buffer, "RUR OK\n")) {
         client->logged_in = 0;
         strcpy(response, "Successful unregister\n");
         return 0;
     }
 
-    if (!strcmp(buffer, "RUR UNR\n")) {
-        strcpy(response, "Unknown user\n");
-        return 0;
-    }
-
-    if (!strcmp(buffer, "RUR NOK\n")) {
-        strcpy(response, "Incorrect unregister attempt\n");
-        return 0;
-    }
-
+    // if none of the above either the client or server are broken (or both!) 
     return ERR_UNKNOWN_ANSWER;
 }
 
-/*--------------------------------- EXIT ----------------------------------------*/
 
+/**
+* Close the client session. 
+* End the current session if the user is not logged in. This handler is a local
+* command and doesn't perform any communication with the server.
+*/
 int handle_exit (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     if (client->logged_in)
         return ERR_NOT_LOGGED_OUT;
@@ -178,12 +247,18 @@ int handle_exit (char *input, struct client_state *client, char response[MAX_SER
     exit(0);
 }
 
-/*--------------------------------- LIST ----------------------------------------*/
 
+/**
+* Requests the AS for the list of existing auctions.
+* Returns 0 if successfully communicated with server and writes result to `response`.
+* Returns an error code if the operation cannot be concluded or if the server responds with
+* an invalid protocol message
+*/
 int handle_list (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("Entered");
     /**
-    * Build response and send it
+    * Create and send protocol message
+    * Format: LST 
     */
     char request[8];
     sprintf(request, "LST\n");
@@ -192,6 +267,10 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
         return ERR_REQUESTING_UDP;
     }
 
+    /**
+    * Receive and validate server response
+    * Expected format: RLS status [AID state]* 
+    **/
     char buffer[8192]; 
     int err = receive_udp_response(buffer, 8192, client);
     if (err < 0) {
@@ -201,48 +280,48 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
         return ERR_RECEIVING_UDP;
     }
 
-    /** 
-    * Validate expected arguments and return response as soon as one is found.
-    * If invalid arguments are read or arguments are missing return with error
-    */
+    // retrieve response protocol command 
     char *cmd_resp = strtok(buffer, " ");
-
     if (cmd_resp == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // check if command response matches the sent request
-    if (strcmp(cmd_resp, "RLS")) {
+    // validate response protocol command
+    if (strcmp(cmd_resp, "RLS") != 0) {
         return ERR_UNKNOWN_ANSWER;
     }
 
+    // retrieve command payload
     char *payload = strtok(NULL, "\n");
-
     if (payload == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // check if NOK was received (it's the entire payload)
-    if (!strcmp(payload, "NOK")) {
+    // ERR, the request was invalid, this means the client is broken
+    if (!strcmp(payload, "ERR\n")) {
+        strcpy(response, "Server returned an error status\n");
+        return 0;
+    }
+
+    // NOK, no auctions 
+    if (!strcmp(payload, "NOK\n")) {
         strcpy(response, "No auctions currently available\n");
         return 0;
     }
 
-    // retrieve (expected) OK status from payload
+    // check if OK is really there (it should) 
     char *status = strtok(payload, " ");
-
     if (status == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // if status is not OK then we are out of options, return error    
+    // status wasn't OK (meaning we didn't get a known status)
     if (strcmp(status, "OK") != 0) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // retrieve requested data from payload        
+    // retrieve the actual list from the message
     char *data = strtok(NULL, "\n");
-
     if (data == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
@@ -287,13 +366,18 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
     return 0;
 }
 
-/*--------------------------------- MY AUCTIONS ----------------------------------------*/
 
+/**
+* Requests the AS for the list of a user's auctions.
+* Returns 0 if successfully communicated with server and writes result to `response`.
+* Returns an error code if the operation cannot be concluded or if the server responds with
+* an invalid protocol message
+*/
 int handle_my_auctions (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
-    char *uid = strtok(input, " ");
     /**
-    * Build request and send it
+    * Validate command arguments 
     */
+    char *uid = strtok(input, " ");
     if (uid == NULL) {
         return ERR_NULL_ARGS;
     }
@@ -302,12 +386,21 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
         return ERR_INVALID_UID;
     }
 
+    /**
+    * Create and send protocol message
+    * Format: LMA UID 
+    */
     char request[16];
     sprintf(request, "LMA %.6s\n", uid);
+    
     if (send_udp_request(request, strlen(request), client) != 0) {
         return ERR_REQUESTING_UDP;
     }
 
+    /**
+    * Receive and validate server response
+    * Expected format: RMA status [AID state]* 
+    **/
     char buffer[8192]; 
     if (receive_udp_response(buffer, 8192, client) < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -316,54 +409,54 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
         return ERR_RECEIVING_UDP;
     }
 
-    /** 
-    * Validate expected arguments and return response as soon as one is found.
-    * If invalid arguments are read or arguments are missing return with error
-    */
+    
+    // retrieve response protocol command 
     char *cmd_resp = strtok(buffer, " ");
-
     if (cmd_resp == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // check to see if command response matches our request
-    if (strcmp(cmd_resp, "RMA")) {
+    // validate response protocol command
+    if (strcmp(cmd_resp, "RMA") != 0) {
         return ERR_UNKNOWN_ANSWER;
     }
 
     char *payload = strtok(NULL, "\n");
-
     if (payload == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // check if NOK was received (it's the entire payload)
-    if (!strcmp(payload, "NOK")) {
+    // ERR, the request was invalid, this means the client is broken
+    if (!strcmp(payload, "ERR\n")) {
+        strcpy(response, "Server returned an error status\n");
+        return 0;
+    }
+
+    // NOK, no auctions 
+    if (!strcmp(payload, "NOK\n")) {
         strcpy(response, "No auctions currently available\n");
         return 0;
     }
 
-    // check if NLG was received (it's the entire payload)
-    if (!strcmp(payload, "NLG")) {
+    // NLG, user is not logged in
+    if (!strcmp(payload, "NLG\n")) {
         strcpy(response, "User is not logged in\n");
         return 0;
     }
 
-    // retrieve (expected) OK status from payload
+    // check if OK is really there (it should) 
     char *status = strtok(payload, " ");
-
     if (status == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // if OK was not received then we are out of options, so it's an error
-    if (strcmp(status, "OK")) {
+    // status wasn't OK (meaning we didn't get a known status)
+    if (strcmp(status, "OK") != 0) {
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // retrieve requested data from payload
+    // retrieve the actual list from the message
     char *data = strtok(NULL, "\n");
-
     if (data == NULL) {
         return ERR_UNKNOWN_ANSWER;
     }
@@ -405,13 +498,11 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
     if (per_line_count != 0)
         strcat(response, "\n");
 
-
-
     return 0;
 }
 
-/*--------------------------------- SHOW RECORD  ----------------------------------------*/
 
+// TODO handle_show_record
 int handle_show_record (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     char *aid;
     /**
@@ -546,11 +637,16 @@ int handle_show_record (char *input, struct client_state *client, char response[
 }
 
 
+// TODO handle_my_bids
 int handle_my_bids (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG(" ");
     return 0;
 }
 
+/**
+* Send a the UDP message `message` with size `msg_size` to the server.
+* Returns 0 on sucess and -1 on failure, to detect timeout check errno value.
+*/
 int send_udp_request(char *message, size_t msg_size, struct client_state *client) {
     ssize_t n = sendto(client->annouce_socket, message, msg_size, 0, client->as_addr, client->as_addr_len);
     if (n == -1) {
@@ -562,6 +658,10 @@ int send_udp_request(char *message, size_t msg_size, struct client_state *client
     return 0;
 }
 
+/**
+* Read a message from the client's UDP socket to `buffer` of size `msg_size`.
+* Returns 0 on sucess and -1 on failure.
+*/
 int receive_udp_response(char *buffer, size_t response_size, struct client_state *client) {
     //set timeout to socket
     struct timeval timeout;
@@ -573,7 +673,7 @@ int receive_udp_response(char *buffer, size_t response_size, struct client_state
         return -1;
     }
 
-    //receive response
+    // receive response
     ssize_t n = recvfrom(client->annouce_socket, buffer, response_size, 0, client->as_addr, &client->as_addr_len);
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -585,7 +685,7 @@ int receive_udp_response(char *buffer, size_t response_size, struct client_state
         return -1;
     }
 
-    buffer[n] = '\0';
+    // buffer[n] = '\0';
 
     return 0;
 }
