@@ -12,7 +12,7 @@
     do {                                                           \
         char buf[65535];                                           \
         snprintf(buf, 65535, __VA_ARGS__);                         \
-        fprintf(stdout, "%s\n", buf);                              \
+        fprintf(stdout, "%s", buf);                              \
     } while (0);
 
 struct client_state {

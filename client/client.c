@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "../utils/config.h"
 #include "../utils/logging.h"
@@ -65,12 +66,16 @@ void run_client(char *ip, char *port) {
     struct client_state client;
 
     if (initialize_client(ip, port, &client) != 0) {
-        LOG_ERROR("Failed initializing client")
+        LOG_DEBUG("Failed initializing client");
         exit(1);
     }
 
-    // DISPLAY_CLIENT("\033[2J");
-    DISPLAY_CLIENT("--- Welcome to the AS client! ---")
+    if (signal(SIGPIPE, SIG_IGN) != 0) {
+        LOG_DEBUG("Failed overwritteng default SIGPIPE handler");
+        LOG_ERROR("signal: %s", strerror(errno));
+    }
+
+    DISPLAY_CLIENT("--- Welcome to the AS client! ---\n");
     char user_input[1024];
     char response[MAX_SERVER_RESPONSE];
     while (fgets(user_input, 1024, stdin)) {
@@ -79,8 +84,8 @@ void run_client(char *ip, char *port) {
 
         if (user_input[endl_idx] != '\n') {
             LOG("Command too large!")
-            continue;
             clean_stdin_buffer();
+            continue;
         }
 
         // replace last '\n' with '\0' (or truncate)
@@ -93,7 +98,6 @@ void run_client(char *ip, char *port) {
         }
 
         DISPLAY_CLIENT("%s", response);
-
     }
 }
 

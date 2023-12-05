@@ -27,6 +27,7 @@ struct command_mappings command_table[] = {
     {"logout", handle_logout},
     {"unregister", handle_unregister},
     {"exit", handle_exit},
+    {"q", handle_exit},
     {"open", handle_open},
     {"close", handle_close},
     {"myauctions", handle_my_auctions},
@@ -41,6 +42,9 @@ struct command_mappings command_table[] = {
     {"b", handle_bid},
     {"show_record", handle_show_record},
     {"sr", handle_show_record},
+    {"clear", handle_clear},
+    {"help", handle_help},
+    {"h", handle_help},
 };
 
 
@@ -49,14 +53,29 @@ struct command_mappings command_table[] = {
 const 
 static 
 struct error_mappings error_lookup_table[] = {
-    {ERR_TIMEDOUT_UDP, "Timed out waiting for server"},
-    {ERR_REQUESTING_UDP, "Failed sending request to server"},
-    {ERR_RECEIVING_UDP, "Failed reading response from server"},
-    {ERR_NULL_ARGS, "Missing arguments for command"},
-    {ERR_INVALID_UID, "The UID must be numeric string of size 6"},
-    {ERR_INVALID_PASSWD, "The password must be an alphanumeric string of size 8"},
-    {ERR_INVALID_AID, "The AID must be a numeric string of size 3 (0 padded)"},
-    {ERR_UNKNOWN_ANSWER, "Got an unknown response message from the server"},
+    {ERR_TIMEDOUT_UDP, "Timed out waiting for server UDP response\n"},
+    {ERR_REQUESTING_UDP, "Failed sending UDP request to server\n"},
+    {ERR_RECEIVING_UDP, "Failed reading UDP response from server\n"},
+    {ERR_NULL_ARGS, "Missing arguments for command\n"},
+    {ERR_INVALID_UID, "The UID must be numeric string of size 6\n"},
+    {ERR_INVALID_PASSWD, "The password must be an alphanumeric string of size 8\n"},
+    {ERR_INVALID_AID, "The AID must be a numeric string of size 3 (0 padded)\n"},
+    {ERR_UNKNOWN_ANSWER, "Got an unknown response message from the server\n"},
+    {ERR_FILE_DOESNT_EXIST, "Asset file doesn't exist\n"},
+    {ERR_INVALID_ASSET_NAME, "Invalid asset name, must an alphanumeric with size less than 10\n"},
+    {ERR_INVALID_ASSET_FNAME, "Invalid asset fname, might contain ilegal characters\n"},
+    {ERR_INVALID_SV, "Invalid start value, must be a number with up to 6 digits\n"},
+    {ERR_INVALID_TA, "Invalid time active, must be a number represented with up to 5 digits\n"},
+    {ERR_INVALID_ASSET_FILE, "Couldn't reach specified asset file\n"},
+    {ERR_TCP_CONN_TO_SERVER, "Failed establishing a connection to the server\n"},
+    {ERR_TIMEOUT_TCP, "Timed out waiting for server TCP response\n"},
+    {ERR_RECEIVING_TCP, "Failed reading TCP response from TCP server\n"},
+    {ERR_REQUESTING_TCP, "Failed sending TCP request to server\n"},
+    {ERR_NOT_LOGGED_IN, "Must be logged in to perform this operation\n"},
+    {ERR_ALREADY_LOGGED_IN, "A user is already logged in\n"},
+    {ERR_NOT_LOGGED_OUT, "Please logout before performing this operation\n"},
+    {ERR_NO_COMMAND, ""},
+    {ERR_INVALID_COMMAND, "Invalid command, type `help` for more information\n"},
 };
 
 const 
