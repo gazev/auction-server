@@ -24,19 +24,15 @@
 */
 int handle_udp_command(char *request, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [UDP] Serving client", client->ipv4, client->port);
-    char *cmd = strtok(request, " ");
+    // read the command
+    char cmd[5] = {0};
+    strncpy(cmd, request, 4);
 
-    if (cmd == NULL) {
-        LOG_VERBOSE("%s:%d - [UDP] No command supplied, error", client->ipv4, client->port);
-        return -1;
-    }
-
-    if (strlen(cmd) != 3) {
-        // printf("%ld\n", strlen(cmd));
-        LOG_DEBUG("%s:%d - [UDP] Not enough characters for command token", client->ipv4, client->port);
-        LOG_VERBOSE("%s:%d - [UDP] Invalid command, ignoring", client->ipv4, client->port);
-        return -1;
-    }
+    // if (strlen(cmd) != 4) {
+    //     LOG_DEBUG("%s:%d - [UDP] Not enough characters for command token", client->ipv4, client->port);
+    //     LOG_VERBOSE("%s:%d - [UDP] Invalid command, ignoring", client->ipv4, client->port);
+    //     return -1;
+    // }
 
     udp_handler_fn fn = get_udp_handler_fn(cmd);
 
@@ -47,7 +43,7 @@ int handle_udp_command(char *request, struct udp_client *client, char *response,
 
     LOG_VERBOSE("%s:%d - [UDP] Handling %s command", client->ipv4, client->port, cmd);
 
-    int err = fn(request, client, response, response_len);
+    int err = fn(request + strlen(cmd), client, response, response_len);
     // if the syntax of the request was incorrect or values were missing
     if (err) {
         LOG_VERBOSE("%s:%d - [UDP] Badly formatted command", client->ipv4, client->port);
@@ -65,10 +61,14 @@ int handle_udp_command(char *request, struct udp_client *client, char *response,
 * If an error occurs the corresponding error value is returned. If successful
 * 0 is returned
 **/
-int handle_login(char *input, struct udp_client *client, char *response, size_t *response_len) {
+int handle_login(char input[], struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [LIN] Entered handler", client->ipv4, client->port);
-    char *uid = strtok(NULL, " ");
+    /** 
+    * Validate message parameters
+    */
+    char *uid, *passwd;
 
+    uid = strtok(input, " ");
     if (uid == NULL) {
         LOG_VERBOSE("%s:%d - [LIN] No UID supplied", client->ipv4, client->port);
         return ERR_LIN_BAD_VALUES;
@@ -79,8 +79,9 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
         return ERR_LIN_BAD_VALUES;
     }
 
-    char *passwd = strtok(NULL, " ");
-
+    // NOTE this makes the server permissive, that is, if we receive a LIN UID PASSWD\0
+    // we also accepted, it's not the end of the world
+    passwd = strtok(NULL, "\n");
     if (passwd == NULL) {
         LOG_VERBOSE("%s:%d - [LIN] No password supplied", client->ipv4, client->port);
         return ERR_LIN_BAD_VALUES;
@@ -130,10 +131,15 @@ int handle_login(char *input, struct udp_client *client, char *response, size_t 
     return 0;
 }
 
+
 int handle_logout(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [LOU] Entered handler", client->ipv4, client->port);
-    char *uid = strtok(NULL, " ");
+    /** 
+    * Validate message parameters
+    */
+    char *uid, *passwd;
 
+    uid = strtok(input, " ");
     if (uid == NULL) {
         LOG_VERBOSE("%s:%d - [LOU] No UID supplied", client->ipv4, client->port);
         return ERR_LOU_BAD_VALUES;
@@ -144,8 +150,7 @@ int handle_logout(char *input, struct udp_client *client, char *response, size_t
         return ERR_LOU_BAD_VALUES;
     }
 
-    char *passwd = strtok(NULL, " ");
-
+    passwd = strtok(NULL, "\n");
     if (passwd == NULL) {
         LOG_VERBOSE("%s:%d - [LOU] No password supplied", client->ipv4, client->port);
         return ERR_LOU_BAD_VALUES;
@@ -190,15 +195,20 @@ int handle_logout(char *input, struct udp_client *client, char *response, size_t
 
     LOG_VERBOSE("%s:%d - [LOU] Logged out user %s", client->ipv4, client->port, uid);
     sprintf(response, "RLO OK\n");
-    *response_len = 8;
+    *response_len = 7;
 
     return 0;
 }
 
+
 int handle_unregister(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [UNR] Entered handler", client->ipv4, client->port);
-    char *uid = strtok(NULL, " ");
 
+    /** 
+    * Validate message parameters
+    */
+    char *uid, *passwd;
+    uid = strtok(input, " ");
     if (uid == NULL) {
         LOG_VERBOSE("%s:%d - [UNR] No UID supplied", client->ipv4, client->port);
         return ERR_UNR_BAD_VALUES;
@@ -209,8 +219,7 @@ int handle_unregister(char *input, struct udp_client *client, char *response, si
         return ERR_UNR_BAD_VALUES;
     }
 
-    char *passwd = strtok(NULL, " ");
-
+    passwd = strtok(NULL, "\n");
     if (passwd == NULL) {
         LOG_VERBOSE("%s:%d - [UNR] No password supplied", client->ipv4, client->port);
         return ERR_UNR_BAD_VALUES;
@@ -261,11 +270,15 @@ int handle_unregister(char *input, struct udp_client *client, char *response, si
     return 0;
 }
 
+
 int handle_my_auctions(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [LMA] Entered handler", client->ipv4, client->port);
-    update_database();
-    char *uid = strtok(NULL, "\n");
+    /**
+    * validate command arguments 
+    */
+    char *uid;
 
+    uid = strtok(input, "\n");
     if (uid == NULL) {
         LOG_VERBOSE("%s:%d - [LMA] No UID supplied", client->ipv4, client->port);
         return ERR_LMA_BAD_VALUES;
@@ -276,9 +289,23 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
         return ERR_LMA_BAD_VALUES;
     }
 
+    /**
+    * Update database and validate 
+    */
+    update_database();
+
     // check if user exists
-    if (!exists_user(uid) || !is_user_logged_in(uid)) {
-        LOG_VERBOSE("%s:%d - [LMA] User %s doesn't exist or isn't logged in", client->ipv4, client->port, uid);
+    if (!exists_user(uid)) {
+        LOG_VERBOSE("%s:%d - [LMA] User %s doesn't exist", client->ipv4, client->port, uid);
+        sprintf(response, "RMA NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+ 
+
+    // check if user is logged in
+    if(!is_user_logged_in(uid)) {
+        LOG_VERBOSE("%s:%d - [LMA] User %s isn't logged in", client->ipv4, client->port, uid);
         sprintf(response, "RMA NLG\n");
         *response_len = 8;
         return 0;
@@ -315,19 +342,26 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
     return 0;
 }
 
+
+// TODO
 int handle_my_bids(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_my_bids");
     update_database();
     return 0;
 }
 
+
 int handle_list(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [LST] Entered handler", client->ipv4, client->port);
+    /** Update database*/
     update_database();
 
-    // get auctions list
+    /**
+    * Build and send response
+    */
     sprintf(response, "RLS OK");
     *response_len = 6;
+    // get auctions list
     int written = get_auctions_list(response);
 
     if (written < 0) {
@@ -351,10 +385,14 @@ int handle_list(char *input, struct udp_client *client, char *response, size_t *
     return 0;
 }
 
+
 int handle_show_record(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [SRC] Entered handler", client->ipv4, client->port);
-    char *aid = strtok(input, " "); 
-
+    /**
+    * Validate command arguments 
+    */
+    char *aid;
+    aid = strtok(input, "\n");
     if (aid == NULL) {
         LOG_VERBOSE("%s:%d - [SRC] No UID supplied", client->ipv4, client->port);
         return ERR_SRC_BAD_VALUES; 

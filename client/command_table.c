@@ -45,6 +45,8 @@ struct command_mappings command_table[] = {
     {"clear", handle_clear},
     {"help", handle_help},
     {"h", handle_help},
+    {"f", handle_format},
+    {"format", handle_format},
 };
 
 
@@ -74,8 +76,11 @@ struct error_mappings error_lookup_table[] = {
     {ERR_NOT_LOGGED_IN, "Must be logged in to perform this operation\n"},
     {ERR_ALREADY_LOGGED_IN, "A user is already logged in\n"},
     {ERR_NOT_LOGGED_OUT, "Please logout before performing this operation\n"},
-    {ERR_NO_COMMAND, ""},
+    {ERR_NO_COMMAND, ""}, // simply don't print anything
     {ERR_INVALID_COMMAND, "Invalid command, type `help` for more information\n"},
+    {ERR_CREAT_ASSET_FILE, "Couldn't create asset file\n"},
+    {ERR_WRITE_ASSET_FILE, "Failed writting contents to asset file\n"},
+    {ERR_READ_ASSET_FILE, "Failed reading contents from asset file\n"},
 };
 
 static 

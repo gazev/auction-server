@@ -27,5 +27,6 @@ int handle_bid(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
 int handle_show_record(char *input, struct client_state *, char [MAX_SERVER_RESPONSE]);
 int handle_clear(char *input, struct client_state *, char *response);
 int handle_help(char *input, struct client_state *, char *response);
+int handle_format(char *input, struct client_state *, char *response);
 
 #endif
