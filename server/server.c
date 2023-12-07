@@ -1,6 +1,3 @@
-#include <asm-generic/errno-base.h>
-#include <asm-generic/errno.h>
-#include <asm-generic/socket.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -68,6 +65,8 @@ void *udp_server_thread_fn(void *thread_v) {
     char send_buffer[UDP_DATAGRAM_SIZE]; // where responses are stored before sending
     size_t response_size;
     while (1) {
+        memset(recv_buffer, 0, sizeof(recv_buffer));
+        memset(send_buffer, 0, sizeof(send_buffer));
         memset(&udp_client, 0, sizeof(struct udp_client));
         memset(&client_addr, 0, sizeof(client_addr));
 
@@ -106,10 +105,6 @@ void *udp_server_thread_fn(void *thread_v) {
             }
             continue;
         }
-
-        // put null termination at the end of the input
-        // this makes it easier to handle arguments
-        recv_buffer[read - 1] = '\0';
 
         /**
         * Handle the request 

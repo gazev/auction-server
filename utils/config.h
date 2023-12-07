@@ -1,7 +1,7 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
-#define DEFAULT_PORT "5800"
+#define DEFAULT_PORT "58078"
 
 #define UID_SIZE 6
 #define PASSWORD_SIZE 8
@@ -16,6 +16,7 @@
 #define FNAME_LEN 24
 #define FSIZE_STR_LEN 8
 
+#define MAX_FSIZE 10000000
 #define MAX_SERVER_RESPONSE 65535 //The max size a server response can have (1 datagram)
 
 #define DB_ROOT "ASDIR"

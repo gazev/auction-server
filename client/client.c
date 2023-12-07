@@ -83,7 +83,7 @@ void run_client(char *ip, char *port) {
         int endl_idx = strcspn(user_input, "\n");
 
         if (user_input[endl_idx] != '\n') {
-            DISPLAY_CLIENT("Command too large!\n");
+            DISPLAY_CLIENT("Command too large! Type `help` for more information\n");
             clean_stdin_buffer();
             continue;
         }

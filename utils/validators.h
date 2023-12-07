@@ -11,3 +11,5 @@ int is_valid_time_active(char *);
 
 int is_valid_fname(char *);
 int is_valid_fsize(char *);
+
+int is_valid_date_time(char *date, char *time);

@@ -3,15 +3,13 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <errno.h>
-
+#include <time.h>
 
 #include "../utils/logging.h"
 #include "../utils/validators.h"
 
 #include "command_table.h"
-
-int send_udp_request(char *buff, size_t size, struct client_state *);
-int receive_udp_response(char *buff, size_t size, struct client_state *);
+#include "udp.h"
 
 /**
 * Requests the AS to log in a user.
@@ -55,12 +53,15 @@ int handle_login (char *input, struct client_state *client, char response[MAX_SE
     * Receive and validate server response
     * Expected format: RLI status
     **/
-    char buffer[32];
+    char buffer[32] = {0};
     int err = receive_udp_response(buffer, 32, client);
-    if (err < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (err != 0) {
+        if (err == UDP_ERR_NO_LF_MESSAGE)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEDOUT_UDP;
-        }
+
         return ERR_RECEIVING_UDP;
     }
 
@@ -124,12 +125,15 @@ int handle_logout (char *input, struct client_state *client, char response[MAX_S
     * Receive and validate server response
     * Expected format: RLO status
     **/
-    char buffer[32];
+    char buffer[32] = {0};
     int err = receive_udp_response(buffer, 32, client);
-    if (err < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (err != 0) {
+        if (err == UDP_ERR_NO_LF_MESSAGE)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEDOUT_UDP;
-        }
+
         return ERR_RECEIVING_UDP;
     }
 
@@ -190,12 +194,16 @@ int handle_unregister (char *input, struct client_state *client, char response[M
     * Receive and validate server response
     * Expected format: RUR status
     **/
-    char buffer[32];
+    char buffer[32] = {0};
     int err = receive_udp_response(buffer, 32, client);
-    if (err < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            return ERR_TIMEDOUT_UDP;
+    if (err != 0) {
+        if (err == UDP_ERR_NO_LF_MESSAGE) {
+            return ERR_UNKNOWN_ANSWER;
         }
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return ERR_TIMEDOUT_UDP;
+
         return ERR_RECEIVING_UDP;
     }
 
@@ -271,60 +279,57 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
     * Receive and validate server response
     * Expected format: RLS status [AID state]* 
     **/
-    char buffer[8192]; 
+    char buffer[8192] = {0}; 
     int err = receive_udp_response(buffer, 8192, client);
-    if (err < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    if (err != 0) {
+        if (err == UDP_ERR_NO_LF_MESSAGE)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEDOUT_UDP;
-        }
+
         return ERR_RECEIVING_UDP;
     }
 
     // retrieve response protocol command 
     char *cmd_resp = strtok(buffer, " ");
-    if (cmd_resp == NULL) {
+    if (cmd_resp == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // validate response protocol command
-    if (strcmp(cmd_resp, "RLS") != 0) {
+    if (strcmp(cmd_resp, "RLS") != 0)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // retrieve command payload
     char *payload = strtok(NULL, "\n");
-    if (payload == NULL) {
+    if (payload == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // ERR, the request was invalid, this means the client is broken
-    if (!strcmp(payload, "ERR\n")) {
+    if (!strcmp(payload, "ERR")) {
         strcpy(response, "Server returned an error status\n");
         return 0;
     }
 
     // NOK, no auctions 
-    if (!strcmp(payload, "NOK\n")) {
+    if (!strcmp(payload, "NOK")) {
         strcpy(response, "No auctions currently available\n");
         return 0;
     }
 
     // check if OK is really there (it should) 
     char *status = strtok(payload, " ");
-    if (status == NULL) {
+    if (status == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // status wasn't OK (meaning we didn't get a known status)
-    if (strcmp(status, "OK") != 0) {
+    if (strcmp(status, "OK") != 0)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // retrieve the actual list from the message
     char *data = strtok(NULL, "\n");
-    if (data == NULL) {
+    if (data == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     /**
     * Build response string in the format:
@@ -333,7 +338,11 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
     */    
     int per_line_count = 0;
     memset(response, 0, MAX_SERVER_RESPONSE);
-    strcat(response, "--- Clearing terminal ---\033[2J\033[HFormat: |{AID - Status}| 5* (6 per line)\nStatus: A - Active, C - Closed\n\n");
+    strcat(response, "--- Clearing terminal ---\033[2J\033[H\n"
+                     "Format: |{AID - Status}| 5* (6 per line)\n"
+                     "Status: A - Active, C - Closed\n\n"
+
+                     "AS Auctions:");
     char *auc_id = strtok(data, " ");
     while (auc_id  != NULL) {
         strcat(response, "|");
@@ -341,9 +350,8 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
 
         char *status = strtok(NULL, " ");
         // 1 or 0
-        if (status == NULL) {
+        if (status == NULL)
             return ERR_UNKNOWN_ANSWER;
-        }
 
         if (!strcmp(status, "1")) {
             strcat(response, " - A| ");
@@ -374,17 +382,16 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
 * an invalid protocol message
 */
 int handle_my_auctions (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
+    LOG_DEBUG("Entered");
     /**
     * Validate command arguments 
     */
     char *uid = strtok(input, " ");
-    if (uid == NULL) {
+    if (uid == NULL)
         return ERR_NULL_ARGS;
-    }
 
-    if (!is_valid_uid(uid)) {
+    if (!is_valid_uid(uid))
         return ERR_INVALID_UID;
-    }
 
     /**
     * Create and send protocol message
@@ -401,65 +408,62 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
     * Receive and validate server response
     * Expected format: RMA status [AID state]* 
     **/
-    char buffer[8192]; 
-    if (receive_udp_response(buffer, 8192, client) < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    char buffer[8192] = {0}; 
+    int err = receive_udp_response(buffer, 8192, client);
+    if (err != 0) {
+        if (err == UDP_ERR_NO_LF_MESSAGE)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEDOUT_UDP;
-        }
+
         return ERR_RECEIVING_UDP;
     }
 
-    
     // retrieve response protocol command 
-    char *cmd_resp = strtok(buffer, " ");
-    if (cmd_resp == NULL) {
+    char *command = strtok(buffer, " ");
+    if (command == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // validate response protocol command
-    if (strcmp(cmd_resp, "RMA") != 0) {
+    if (strcmp(command, "RMA") != 0)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     char *payload = strtok(NULL, "\n");
-    if (payload == NULL) {
+    if (payload == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // ERR, the request was invalid, this means the client is broken
-    if (!strcmp(payload, "ERR\n")) {
+    if (!strcmp(payload, "ERR")) {
         strcpy(response, "Server returned an error status\n");
         return 0;
     }
 
     // NOK, no auctions 
-    if (!strcmp(payload, "NOK\n")) {
+    if (!strcmp(payload, "NOK")) {
         strcpy(response, "No auctions currently available\n");
         return 0;
     }
 
     // NLG, user is not logged in
-    if (!strcmp(payload, "NLG\n")) {
+    if (!strcmp(payload, "NLG")) {
         strcpy(response, "User is not logged in\n");
         return 0;
     }
 
     // check if OK is really there (it should) 
     char *status = strtok(payload, " ");
-    if (status == NULL) {
+    if (status == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // status wasn't OK (meaning we didn't get a known status)
-    if (strcmp(status, "OK") != 0) {
+    if (strcmp(status, "OK") != 0)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // retrieve the actual list from the message
     char *data = strtok(NULL, "\n");
-    if (data == NULL) {
+    if (data == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     /**
     * Build response string in the format:
@@ -469,20 +473,30 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
     int per_line_count = 0;
     char *auc_id = strtok(data, " ");
     memset(response, 0, MAX_SERVER_RESPONSE);
-    strcat(response, "--- Clearing terminal ---\033[2J\033[HFormat: |{AID - Status}| 5* (6 per line)\nStatus: A - Active, C - Closed\n\n");
-    while (auc_id  != NULL) {
+    strcat(response, "--- Clearing terminal ---\033[2J\033[H"
+                     "Format: |{AID - Status}| 5* (6 per line)\n"
+                     "Status: A - Active, C - Closed\n\n"
+            
+                     "Auctions for user ");
+    strcat(response, uid);
+    strcat(response, "\n");
+    while (auc_id != NULL) {
+        if (!is_valid_aid(auc_id))
+            return ERR_UNKNOWN_ANSWER;
+
         strcat(response, "|");
         strcat(response, auc_id);
 
         char *status = strtok(NULL, " ");
-        if (status == NULL) {
+        if (status == NULL)
             return ERR_UNKNOWN_ANSWER;
-        }
 
         if (!strcmp(status, "1")) {
             strcat(response, " - A| ");
-        } else {
+        } else if (!strcmp(status, "0")) {
             strcat(response, " - C| ");
+        } else {
+            return ERR_UNKNOWN_ANSWER;
         }
 
         per_line_count += 1;
@@ -502,20 +516,19 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
 }
 
 
-// TODO handle_show_record
+// TODO revise, it was done without much care 
 int handle_show_record (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
+    LOG_DEBUG("Entered");
     char *aid;
     /**
     * Validate arguments
     */
     aid = strtok(input, " ");
-    if (aid == NULL) {
+    if (aid == NULL)
         return ERR_NULL_ARGS;
-    }
 
-    if (!is_valid_aid(aid)) {
+    if (!is_valid_aid(aid))
         return ERR_INVALID_AID;
-    }
 
     /**
     * Send request to server
@@ -526,32 +539,38 @@ int handle_show_record (char *input, struct client_state *client, char response[
         return ERR_REQUESTING_UDP;
     }
 
-    char buffer[MAX_SERVER_RESPONSE] = {0};
-    if (receive_udp_response(buffer, MAX_SERVER_RESPONSE, client) < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+    /**
+    * Receive and validate server response
+    * Expected format: 
+    * RRC status [host_UID auction_name asset_fname start_value start_date-time timeactive] [BID INFO]
+    * [BID INFO] comments explaining in parse
+    **/
+    char buffer[65535] = {0}; // this reponse might fill an entire datagram... 
+    int err = receive_udp_response(buffer, 65535, client);
+    if (err != 0) {
+        if (err == UDP_ERR_NO_LF_MESSAGE)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEDOUT_UDP;
-        }
+
         return ERR_RECEIVING_UDP;
     }
 
-    /**
-    * Read and validate server response
-    */
-    char *cmd_resp = strtok(buffer, " ");
-    if (cmd_resp == NULL) {
+    // retrieve response protocol command 
+    char *command = strtok(buffer, " ");
+    if (command == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     // command response wasn't RRC
-    if (strcmp(cmd_resp, "RRC") != 0) {
+    if (strcmp(command, "RRC") != 0)
         return ERR_UNKNOWN_ANSWER;
-    }
 
     char *payload = strtok(NULL, "\n");
-    if (payload == NULL) {
+    if (payload == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
+    // ERR status response
     if (!strcmp(payload, "ERR")) {
         strcpy(response, "Got an error response from server\n");
         return 0;
@@ -564,74 +583,144 @@ int handle_show_record (char *input, struct client_state *client, char response[
     }
 
     char *status = strtok(payload, " ");
-
-    if (status == NULL) {
+    if (status == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
-    if (strcmp(status, "OK") != 0) {
+    if (strcmp(status, "OK") != 0)
         return ERR_UNKNOWN_ANSWER;
-    }
 
+    // the actual data with bids information
     char *data = strtok(NULL, "\n");
-
-    if (data == NULL) {
+    if (data == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
+    // host_UID
     char *host_uid = strtok(data, " ");
-
-    if (host_uid == NULL) {
+    if (host_uid == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
-    if (!is_valid_uid(host_uid)) {
+    if (!is_valid_uid(host_uid))
         return ERR_UNKNOWN_ANSWER;
-    }
 
-    char *auc_name = strtok(NULL, " ");
-
-    if (auc_name == NULL) {
+    // auction name
+    char *name = strtok(NULL, " ");
+    if (name == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
-    if (!is_valid_name(auc_name)) {
+    if (!is_valid_name(name))
         return ERR_UNKNOWN_ANSWER;
-    }
 
+    // asset file name
     char *fname = strtok(NULL, " ");
-
-    if (fname == NULL) {
+    if (fname == NULL)
         return ERR_UNKNOWN_ANSWER;
-    }
 
-    if (!is_valid_fname(fname)) {
+    if (!is_valid_fname(fname))
         return ERR_UNKNOWN_ANSWER;
-    }
 
+    // start value
     char *sv = strtok(NULL, " ");
-
-    if (sv == NULL) {
+    if (sv == NULL)
         return ERR_UNKNOWN_ANSWER;
+
+    if (!is_valid_start_value(sv))
+        return ERR_UNKNOWN_ANSWER;
+
+    // start date time in format YYYY-MM-DD HH:MM:SS
+    char *start_date = strtok(NULL, " ");
+    if (start_date == NULL)
+        return ERR_UNKNOWN_ANSWER;
+
+    char *start_time = strtok(NULL, " ");
+    if (start_time == NULL)
+        return ERR_UNKNOWN_ANSWER;
+
+    if (!is_valid_date_time(start_date, start_time))
+        return ERR_UNKNOWN_ANSWER;
+
+    char *time_active = strtok(NULL, " ");
+    if (time_active == NULL)
+        return ERR_UNKNOWN_ANSWER;
+
+    if (!is_valid_time_active(time_active))
+        return ERR_UNKNOWN_ANSWER;
+
+    /**
+    * Build cliente display message
+    */
+
+    // auction information
+    char *record_fmt_str = 
+        "--- Clearing terminal ---\033[2J\033[H"
+        "Auction:        %s\n"
+        "Auction name:   %s\n"
+        "Hosted by:      %s\n"
+        "Asset:          %s\n"
+        "Start Value:    %s\n"
+        "Date started:   %s %s\n"
+        "Time Active:    %s\n"
+        "Bids:\n";
+
+    sprintf(response, record_fmt_str, 
+                            aid, name, host_uid, fname, 
+                            sv, start_date, start_time, time_active);
+
+    /**
+    * Build bids information in the format:
+    * { | host UID - bid value - bid time - bid sec time | 2* } (6 per line)
+    */
+    char bid_buff[64];
+    char *token = strtok(NULL, " ");
+    int per_line_count = 0;
+    while (token != NULL && strcmp(token, "B") == 0) {
+        // parse a bidder information 
+        char *bidder_uid = strtok(NULL, " ");
+        if (bidder_uid == NULL)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (!is_valid_uid(bidder_uid))
+            return ERR_UNKNOWN_ANSWER;
+
+        char *bid_value = strtok(NULL, " ");
+        if (bid_value == NULL)
+            return ERR_UNKNOWN_ANSWER; 
+
+        if (!is_valid_start_value(bid_value))
+            return ERR_UNKNOWN_ANSWER;
+
+        char *bid_date = strtok(NULL, " ");
+        if (bid_date == NULL)
+            return ERR_UNKNOWN_ANSWER;
+            
+        char *bid_time = strtok(NULL, " ");
+        if (bid_time == NULL)
+            return ERR_UNKNOWN_ANSWER;
+        
+        if (!is_valid_date_time(bid_date, bid_time))
+            return ERR_UNKNOWN_ANSWER;
+
+        char *bid_sec = strtok(NULL, " ");
+        if (bid_sec == NULL)
+            return ERR_UNKNOWN_ANSWER;
+
+        // the validation for start value works the same as of bid_sec (numeric w len <= 6)
+        if (!is_valid_start_value(bid_sec))
+            return ERR_UNKNOWN_ANSWER;
+
+        sprintf(bid_buff, "|%s - %s - %s %s - %s| ", host_uid, bid_value, bid_date, bid_time, bid_sec);
+        strcat(response, bid_buff);
+        per_line_count += 1;
+
+        if (per_line_count == 2) {
+            per_line_count = 0;
+            strcat(response, "\n");
+        }
+
+        token = strtok(NULL, " ");
     }
 
-    if (!is_valid_start_value(sv)) {
-        return ERR_UNKNOWN_ANSWER;
-    }
-
-    char *start_date_time;
-
-    if (start_date_time == NULL) {
-        return ERR_UNKNOWN_ANSWER;
-    }
-
-    // TODO build the user response from the server response
-    // if (!is_valid_date_time(start_date_time)) {
-    //     return ERR_UNKNOWN_ANSWER;
-    // }
-
-
-    strcpy(response, data);
+    if (per_line_count != 2) 
+        strcat(response, "\n");
 
     return 0;
 }
@@ -639,7 +728,7 @@ int handle_show_record (char *input, struct client_state *client, char response[
 
 // TODO handle_my_bids
 int handle_my_bids (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
-    LOG_DEBUG(" ");
+    LOG_DEBUG("Entered");
     return 0;
 }
 
@@ -660,7 +749,9 @@ int send_udp_request(char *message, size_t msg_size, struct client_state *client
 
 /**
 * Read a message from the client's UDP socket to `buffer` of size `msg_size`.
-* Returns 0 on sucess and -1 on failure.
+* It will validate if this message is following to the protocol by checking if it
+is LF terminated, it it isn't it will return UDP_ERR_NO_LF_MESSAGE.
+* If UDP is sucessfully read and obeys the protocol 0 is returned, else, an error code is returned.
 */
 int receive_udp_response(char *buffer, size_t response_size, struct client_state *client) {
     //set timeout to socket
@@ -670,7 +761,7 @@ int receive_udp_response(char *buffer, size_t response_size, struct client_state
     if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         LOG_DEBUG("Failed setting timeout for UDP response socket")
         LOG_ERROR("setsockopt: %s", strerror(errno));
-        return -1;
+        return 1;
     }
 
     // receive response
@@ -682,10 +773,15 @@ int receive_udp_response(char *buffer, size_t response_size, struct client_state
             LOG_DEBUG("Failed reading from UDP socket");
             LOG_ERROR("recvfrom: %s", strerror(errno));
         }
-        return -1;
+        return 1;
     }
 
-    // buffer[n] = '\0';
+    /**
+    * NOTE: Yes, we are being that strict with the protocol...
+    */
+    if (buffer[n - 1] != '\n') {
+        return UDP_ERR_NO_LF_MESSAGE;
+    }
 
     return 0;
 }

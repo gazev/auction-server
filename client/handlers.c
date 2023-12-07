@@ -45,6 +45,7 @@ int handle_help(char *input, struct client_state *c, char *response) {
             "Available commands:\n\n"
 
             "help or h:        Print this message\n"
+            "format or f:      Print formats of various command's messages\n"
             "clear:            Clear terminal window\n"
             "login:            Login to the AS\n"
             "open:             Open a new auction\n"
@@ -66,5 +67,34 @@ int handle_help(char *input, struct client_state *c, char *response) {
 
 int handle_clear(char *input, struct client_state *c, char *response) {
     strcpy(response, "\033[2J\033[H");
+    return 0;
+}
+
+int handle_format(char *input, struct client_state *c, char *response) {
+    char *msg_format =
+        "Messages format:\n\n"
+        "list\n"
+        "  Format:\n"
+        "  |{AID - Status}| (Up to 6 auctions per line)\n\n"
+
+        "  Status Legend:\n"
+        "  A - Active, C - Closed\n\n"
+
+        "myauctions\n"
+        "  Format:\n"
+        "  |{AID - Status}| (Up to 6 auctions per line)\n\n"
+
+        "  Status Legend:\n"
+        "  A - Active, C - Closed\n\n"
+
+        "showrecord\n"
+        "  Format:\n"
+        "  {Auction Information}\n"
+        "  {Bids History}\n\n"
+
+        "  Bids History Format:\n"
+        "  |{Bidder UID - Bid Value - Bid Date - Bid Sec Time}| (Up to 2 per line)\n";
+
+    strcpy(response, msg_format);
     return 0;
 }

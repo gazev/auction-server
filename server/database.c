@@ -13,6 +13,7 @@
 
 #include "../utils/config.h"
 #include "../utils/logging.h"
+#include "../utils/validators.h"
 
 #include "database.h"
 
@@ -75,7 +76,7 @@ int load_db_state() {
     struct dirent *cur;
 
     if ((dp = opendir("AUCTIONS")) == NULL) {
-        LOG_ERROR("[DB] Failed opening AUCTIONS directory");
+        LOG_ERROR("[DB] Failed loading database state");
         LOG_ERROR("[DB] open: %s", strerror(errno));
         return -1;
     }
@@ -86,8 +87,8 @@ int load_db_state() {
     }
 
     if (closedir(dp) != 0) {
-        LOG_ERROR("[DB] Failed closing DIR *dp, resources may be leaking");
-        LOG_ERROR("[DB] closedir: %s", strerror(errno));
+        LOG_DEBUG("[DB] Failed closing DIR *dp, resources may be leaking");
+        LOG_DEBUG("[DB] closedir: %s", strerror(errno));
     };
 
     return 0;
@@ -101,7 +102,7 @@ int update_database() {
     int n_entries = scandir("AUCTIONS", &entries, NULL, NULL);
     if (n_entries < 0) {
         LOG_DEBUG("[DB] Failed retrieving user auctions");
-        LOG_ERROR("[DB] scandir: %s", strerror(errno));
+        LOG_DEBUG("[DB] scandir: %s", strerror(errno));
         unlock_db_mutex("list");
         return -1;
     }
@@ -119,7 +120,7 @@ int update_database() {
         if ((end_fd = open(bid_path, O_RDONLY)) > 0) {
             if (close(end_fd) != 0) {
                 LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
-                LOG_ERROR("[DB] close: %s", strerror(errno));
+                LOG_DEBUG("[DB] close: %s", strerror(errno));
             }
             continue;
         }
@@ -131,7 +132,8 @@ int update_database() {
         sprintf(bid_path, "AUCTIONS/%.3s/START_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
         if ((fp = fopen(bid_path, "r")) == NULL) {
             LOG_DEBUG("[DB] Failed opening bid information file");
-            LOG_ERROR("[DB] fopen: %s", strerror(errno));
+            LOG_DEBUG("[DB] fopen: %s", strerror(errno));
+            continue;
         }
 
         char bid_info[128];
@@ -142,30 +144,39 @@ int update_database() {
         char *time_active;
         char *start_time;
 
+        // time active is the 5th word in the file
         strtok(bid_info, " ");    
         for (int i = 0; i < 4; i++) {
             time_active = strtok(NULL, " ");    
         }
 
+        // start time is the 8th
         for (int i = 0; i < 3; ++i) {
             start_time = strtok(NULL, " ");
         }
 
+        // valida both
         if (time_active == NULL || start_time == NULL) {
             LOG_DEBUG("Got invaild time active and start time from bid file %s", entries[i]->d_name);
             continue;
         }
 
-        long time_active_int = atol(time_active);
-        long start_time_l = atol(start_time);
-        if (time_active_int == 0 || start_time_l == 0) {
-            LOG_DEBUG("Got invaild time active and start time from bid file %s", entries[i]->d_name);
+        if (!is_valid_time_active(time_active)) {
+            LOG_DEBUG("Got invaild time active from bid file %s", entries[i]->d_name);
             continue;
         }
 
+        int time_active_i = atoi(time_active);
+        int start_time_l = atol(start_time);
         long curr_time = time(NULL);
-        /** Check for auction expiration, if not expired, continue*/
-        if (curr_time - start_time_l < time_active_int) {
+
+        if (start_time_l == 0) {
+            LOG_DEBUG("Got invaild start time from bid file %s", entries[i]->d_name);
+        }
+        /** 
+        * Check for auction expiration, if not expired, continue
+        */
+        if (curr_time - start_time_l < time_active_i) {
             continue;
         }
 
@@ -173,28 +184,24 @@ int update_database() {
         * If auction expired, create END file and write to it the date time of 
         * the auction end and the time in seconds it remained active
         */
+        // create END file
         int close_fd;
         sprintf(bid_path, "AUCTIONS/%.3s/END_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
         if ((close_fd = open(bid_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
             LOG_DEBUG("[DB] Failed creating END_%.3s.txt file", entries[i]->d_name);
-            LOG_ERROR("[DB] open: %s", strerror(errno));
+            LOG_DEBUG("[DB] open: %s", strerror(errno));
             continue;
         }
 
         if (close(close_fd) != 0) {
             LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
-            LOG_ERROR("[DB] close: %s", strerror(errno));
+            LOG_DEBUG("[DB] close: %s", strerror(errno));
         }
 
-        if ((fp = fopen(bid_path, "w")) == NULL) {
-            LOG_DEBUG("[DB] Failed opening bid end information file");
-            LOG_ERROR("[DB] fopen: %s", strerror(errno));
-        }
-
+        // get datetime to put in END file
         struct tm *tm_time;
         if ((tm_time = gmtime(&curr_time)) == NULL) {
             LOG_DEBUG("[DB] Couldn't get current time information")
-            fclose(fp);
             continue;
         }
 
@@ -206,6 +213,14 @@ int update_database() {
 
         char end_info[256];
         sprintf(end_info, "%s %ld\n", time_str, curr_time - start_time_l);
+
+ 
+        // write information to END file
+        if ((fp = fopen(bid_path, "w")) == NULL) {
+            LOG_DEBUG("[DB] Failed opening bid end information file");
+            LOG_DEBUG("[DB] fopen: %s", strerror(errno));
+            continue;
+        }
 
         fputs(end_info, fp);
         fclose(fp);
@@ -300,13 +315,14 @@ int get_auction_info(char *aid, char *buff, int n) {
 
     sprintf(auction_path, "AUCTIONS/%3s/START_%3s.txt", aid, aid);
     if ((fp = fopen(auction_path, "r")) == NULL) {
-        LOG_ERROR("[DB] Failed reading from auction %s information file, databsae might be corrupted", aid);
+        LOG_DEBUG("[DB] Failed reading from auction %s information file, databsae might be corrupted", aid);
         unlock_db_mutex(aid);
         return 1;
     }
 
     if (fgets(buff, n, fp) == NULL) {
-        LOG_ERROR("[DB] Failed reading from auction %s information file, database might be corrupted", aid);
+        fclose(fp);
+        LOG_DEBUG("[DB] Failed reading from auction %s information file, database might be corrupted", aid);
         unlock_db_mutex(aid);
         return 1;
     };
@@ -327,8 +343,8 @@ int get_user_auctions(char *uid, char *buff) {
     struct dirent **entries;
     int n_entries = scandir(user_hosted_path, &entries, NULL, alphasort);
     if (n_entries < 0) {
-        LOG_ERROR("[DB] Failed retrieving user auctions");
-        LOG_ERROR("[DB] scandir: %s", strerror(errno));
+        LOG_DEBUG("[DB] Failed retrieving user auctions");
+        LOG_DEBUG("[DB] scandir: %s", strerror(errno));
         unlock_db_mutex(uid);
         return -1;
     }
@@ -349,7 +365,7 @@ int get_user_auctions(char *uid, char *buff) {
             sprintf(asset_status, " %.3s 0", entries[i]->d_name); // ended
             if (close(check_fd) != 0) {
                 LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
-                LOG_ERROR("[DB] close: %s", strerror(errno));
+                LOG_DEBUG("[DB] close: %s", strerror(errno));
             };
         }
         strcat(buff, asset_status);
@@ -375,7 +391,7 @@ int get_auctions_list(char *buff) {
     int n_entries = scandir("AUCTIONS", &entries, NULL, alphasort);
     if (n_entries < 0) {
         LOG_DEBUG("[DB] Failed retrieving user auctions");
-        LOG_ERROR("[DB] scandir: %s", strerror(errno));
+        LOG_DEBUG("[DB] scandir: %s", strerror(errno));
         unlock_db_mutex("list");
         return -1;
     }
@@ -394,7 +410,7 @@ int get_auctions_list(char *buff) {
             sprintf(auc_status, " %.3s 0", entries[i]->d_name); // ended
             if (close(check_fd) != 0) {
                 LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking")
-                LOG_ERROR("[DB] closedir: %s", strerror(errno));
+                LOG_DEBUG("[DB] closedir: %s", strerror(errno));
             };
         }
 
@@ -432,7 +448,7 @@ int log_in_user(char *uid) {
 
     if (close(fd) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
-        LOG_ERROR("[DB] close: %s", strerror(errno));
+        LOG_DEBUG("[DB] close: %s", strerror(errno));
     };
 
     unlock_db_mutex(uid);
@@ -448,7 +464,7 @@ int log_out_user(char *uid) {
     sprintf(user_login_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if (remove(user_login_path) != 0) {
         LOG_DEBUG("[DB] Failed removing login file %s", uid);
-        LOG_ERROR("[DB] remove: %s", strerror(errno));
+        LOG_DEBUG("[DB] remove: %s", strerror(errno));
         unlock_db_mutex(uid);
         return -1;
     }
@@ -469,7 +485,7 @@ int register_user(char *uid, char *passwd) {
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_DEBUG("[DB] Couldn't create user directory for user %s", uid);
-            LOG_ERROR("[DB] mkdir: %s", strerror(errno));
+            LOG_DEBUG("[DB] mkdir: %s", strerror(errno));
             unlock_db_mutex(uid);
             return -1;
         }
@@ -480,7 +496,7 @@ int register_user(char *uid, char *passwd) {
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_DEBUG("[DB] Couldn't create HOSTED directory for user %s", uid);
-            LOG_ERROR("[DB] mkdir: %s", strerror(errno));
+            LOG_DEBUG("[DB] mkdir: %s", strerror(errno));
             unlock_db_mutex(uid);
             return -1;
         }
@@ -491,7 +507,7 @@ int register_user(char *uid, char *passwd) {
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_DEBUG("[DB] Couldn't create BIDDED directory for user %s", uid);
-            LOG_ERROR("[DB] mkdir: %s", strerror(errno));
+            LOG_DEBUG("[DB] mkdir: %s", strerror(errno));
             unlock_db_mutex(uid);
             return -1;
         }
@@ -502,14 +518,14 @@ int register_user(char *uid, char *passwd) {
     sprintf(user_file_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if ((login_fd = open(user_file_path, O_CREAT, SERVER_MODE)) < 0) {
         LOG_DEBUG("[DB] Couldn't create login file for user %6s", uid);
-        LOG_ERROR("[DB] open: %s", strerror(errno));
+        LOG_DEBUG("[DB] open: %s", strerror(errno));
         unlock_db_mutex(uid);
         return -1;
     }
 
     if (close(login_fd) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
-        LOG_ERROR("[DB] close: %s", strerror(errno));
+        LOG_DEBUG("[DB] close: %s", strerror(errno));
     };
 
     // create user password file (e.g root/USERS/123456/123456_pass.txt)
@@ -532,7 +548,7 @@ int register_user(char *uid, char *passwd) {
 
         if (close(pass_fd) != 0) {
             LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
-            LOG_ERROR("[DB] close: %s", strerror(errno));
+            LOG_DEBUG("[DB] close: %s", strerror(errno));
         }
 
         unlock_db_mutex(uid);
@@ -541,7 +557,7 @@ int register_user(char *uid, char *passwd) {
  
     if (close(pass_fd) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
-        LOG_ERROR("[DB] close: %s", strerror(errno));
+        LOG_DEBUG("[DB] close: %s", strerror(errno));
     };
 
     unlock_db_mutex(uid);
@@ -563,7 +579,7 @@ int unregister_user(char *uid) {
     sprintf(user_file_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if (remove(user_file_path) != 0) {
         LOG_DEBUG("[DB] Failed removing login file for user %s", uid);
-        LOG_ERROR("[DB] remove: %s", strerror(errno));
+        LOG_DEBUG("[DB] remove: %s", strerror(errno));
         unlock_db_mutex(uid);
         return -1;
     }
@@ -572,7 +588,7 @@ int unregister_user(char *uid) {
     sprintf(user_file_path, "USERS/%6s/%6s_pass.txt", uid, uid);
     if (remove(user_file_path) != 0) {
         LOG_DEBUG("[DB] Failed removing password file for user %s", uid);
-        LOG_ERROR("[DB] remove: %s", uid);
+        LOG_DEBUG("[DB] remove: %s", uid);
         unlock_db_mutex(uid);
         return -1;
     }
@@ -598,9 +614,15 @@ int is_authentic_user(char *uid, char *passwd) {
         return 0;
     }
 
-    fgets(stored_password, 9, fp);
-    int ret = strcmp(stored_password, passwd) == 0 ? 1 : 0;
+    if (fgets(stored_password, 9, fp) == NULL) {
+        fclose(fp);
+        unlock_db_mutex(uid);
+        return -1;
+    }
+
     fclose(fp);
+
+    int ret = strcmp(stored_password, passwd) == 0 ? 1 : 0;
 
     unlock_db_mutex(uid);
 
@@ -625,7 +647,7 @@ int create_auction_dir() {
     if (mkdir(tmp_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_DEBUG("[DB] Failed creating new auction %s", tmp_path);
-            LOG_ERROR("[DB] mkdir: %s", strerror(errno));
+            LOG_DEBUG("[DB] mkdir: %s", strerror(errno));
             return -1;
         }
     }
@@ -635,7 +657,17 @@ int create_auction_dir() {
     if (mkdir(tmp_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_DEBUG("[DB] Failed creating BIDS folder for auction %s", tmp_path);
-            LOG_ERROR("[DB] mkdir: %s", strerror(errno));
+            LOG_DEBUG("[DB] mkdir: %s", strerror(errno));
+            return -1;
+        }
+    }
+
+    // create BIDS folder inside dir
+    sprintf(tmp_path, "AUCTIONS/%03d/ASSET", auc_count);
+    if (mkdir(tmp_path, SERVER_MODE) != 0) {
+        if (errno != EEXIST) {
+            LOG_DEBUG("[DB] Failed creating ASSET folder for auction %s", tmp_path);
+            LOG_DEBUG("[DB] mkdir: %s", strerror(errno));
             return -1;
         }
     }
@@ -655,30 +687,29 @@ void rollback_auction_dir_creation() {
             LOG_DEBUG("[DB] Dir doesn't exist / wasn't created (%s)", auction_file_path);
         } else {
             LOG_DEBUG("[DB] Failed opening %03d auction directory on rollback action, database might be corrupted", auc_count);
-            LOG_ERROR("[DB] open: %s", strerror(errno));
+            LOG_DEBUG("[DB] open: %s", strerror(errno));
         }
         return;
     }
 
-    // 256 max Unix file name size (althought the paper only allows 25) + prefix (we have more space in buffer than necessary)
-    char asset_file[280]; 
-    // remove all files inside directory
+    char file_path[280]; 
+    // remove all regular files inside directory
     while ((cur = readdir(dp)) != NULL) {
         if (cur->d_name[0] == '.') continue;
 
         // remove all files
         if (cur->d_type == DT_REG) {
-            sprintf(asset_file, "AUCTIONS/%03d/%s", auc_count, cur->d_name);
-            if (remove(asset_file) != 0) {
+            sprintf(file_path, "AUCTIONS/%03d/%s", auc_count, cur->d_name);
+            if (remove(file_path) != 0) {
                 LOG_DEBUG("[DB] Couldn't remove file %s on rollback action, database might be corrupted", cur->d_name);
-                LOG_ERROR("[DB] remove: %s", strerror(errno));
+                LOG_DEBUG("[DB] remove: %s", strerror(errno));
             }
         }
     }
 
     if (closedir(dp) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-        LOG_ERROR("[DB] closedir: %s", strerror(errno));
+        LOG_DEBUG("[DB] closedir: %s", strerror(errno));
     };
 
     // remove bids if they exist
@@ -691,7 +722,7 @@ void rollback_auction_dir_creation() {
 
             if (cur->d_type == DT_REG) {
                 sprintf(bid_file_path, "AUCTIONS/%03d/BIDS/%s", auc_count, cur->d_name);
-                if (remove(asset_file) != 0) {
+                if (remove(bid_file_path) != 0) {
                     LOG_DEBUG("[DB] Couldn't remove bid file %s on rollback action, database might be corrupted", cur->d_name);
                     LOG_ERROR("[DB] remove: %s", strerror(errno));
                 }
@@ -701,20 +732,47 @@ void rollback_auction_dir_creation() {
 
         if (closedir(dp) != 0) {
             LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-            LOG_ERROR("[DB] closedir: %s", strerror(errno));
+            LOG_DEBUG("[DB] closedir: %s", strerror(errno));
         };
 
         // remove directory
         if ((remove(bids_dir) != 0)) {
             LOG_DEBUG("[DB] Failed removing BIDS directory on rollback action, a ghost auction now exists");
-            LOG_ERROR("[DB] remove: %s", strerror(errno));
+            LOG_DEBUG("[DB] remove: %s", strerror(errno));
+        }
+    }
+
+    // remove files in ASSET folder
+    char asset_dir[128];
+    char asset_file_path[128];
+    if ((dp = opendir(asset_dir)) != NULL) {
+        while ((cur = readdir(dp)) != NULL) {
+            if (cur->d_name[0] == '.') continue;
+
+            if (cur->d_type == DT_REG) {
+                sprintf(asset_file_path, "AUCTIONS/%03d/ASSET/%s", auc_count, cur->d_name);
+                if (remove(asset_file_path) != 0) {
+                    LOG_DEBUG("[DB] Couldn't remove bid file %s on rollback action, database might be corrupted", cur->d_name);
+                    LOG_DEBUG("[DB] remove: %s", strerror(errno));
+                }
+            }
+        }
+
+        if (closedir(dp) != 0) {
+            LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
+            LOG_DEBUG("[DB] closedir: %s", strerror(errno));
+        }
+
+        if ((remove(asset_dir) != 0)) {
+            LOG_DEBUG("[DB] Failed removing ASSET directory on rollback action, a ghost auction now exists");
+            LOG_DEBUG("[DB] remove: %s", strerror(errno));
         }
     }
 
     // remove directory
     if ((remove(auction_file_path) != 0)) {
         LOG_DEBUG("[DB] Failed removing directory on rollback action, a ghost auction now exists");
-        LOG_ERROR("[DB] remove: %s", strerror(errno));
+        LOG_DEBUG("[DB] remove: %s", strerror(errno));
     }
  
     auc_count--;
@@ -743,7 +801,7 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
     sprintf(tmp_path, "AUCTIONS/%03d/START_%03d.txt", auc_count, auc_count);
     int sfd;
     if ((sfd = open(tmp_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
-        LOG_ERROR("open: %s", strerror(errno));
+        LOG_DEBUG("open: %s", strerror(errno));
         rollback_auction_dir_creation();
         unlock_db_mutex("create_auction");
         return -1;
@@ -751,7 +809,7 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
 
     if (close(sfd) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-        LOG_ERROR("close: %s", strerror(errno));
+        LOG_DEBUG("close: %s", strerror(errno));
     };
 
     /**
@@ -761,7 +819,7 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
     time_t unix_start_time;
     if ((unix_start_time = time(NULL)) == ((time_t ) - 1)) {
         LOG_DEBUG("[DB] Failed getting UNIX timestamp");
-        LOG_ERROR("[DB] time: %s", strerror(errno));
+        LOG_DEBUG("[DB] time: %s", strerror(errno));
         rollback_auction_dir_creation();
         unlock_db_mutex("create_auction");
         return -1;
@@ -782,8 +840,8 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
                         tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
 
 
-    char start_data[256];
-    sprintf(start_data, "%s %s %s %d %d %s %ld\n", 
+    char start_info[256];
+    sprintf(start_info, "%s %s %s %d %d %s %ld\n", 
                             uid, name, fname, sv, ta, str_time, unix_start_time);
 
     /**
@@ -796,7 +854,7 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
         return -1;
     }
 
-    if (fputs(start_data, fp) < 0) {
+    if (fputs(start_info, fp) < 0) {
         fclose(fp);
         rollback_auction_dir_creation();
         unlock_db_mutex("create_auction");
@@ -808,25 +866,27 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
     /**
     * Retrieve auction asset file
     */
-    sprintf(tmp_path, "AUCTIONS/%03d/%s", auc_count, fname);
+    sprintf(tmp_path, "AUCTIONS/%03d/ASSET/%s", auc_count, fname);
     int afd;
     if ((afd = open(tmp_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
-        LOG_ERROR("[DB] open: %s", strerror(errno));
+        LOG_DEBUG("[DB] open: %s", strerror(errno));
         rollback_auction_dir_creation();
         unlock_db_mutex("create_auction");
         return -1;
     }
 
-    // receive the file from the socket and write it
+    /**
+    * Read asset content from socket
+    */
     char buff[32768]; // 32 KiB
     int total_read = 0;
-    while (total_read < fsize) {
+    while (1) {
         ssize_t read = recv(conn_fd, buff, 32768, 0);
         if (read <= 0) {
             LOG_ERROR("recv: %s", strerror(errno));
             if (close(afd) != 0) {
                 LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-                LOG_ERROR("[DB] close: %s", strerror(errno));
+                LOG_DEBUG("[DB] close: %s", strerror(errno));
             }
             rollback_auction_dir_creation();
             unlock_db_mutex("create_auction");
@@ -834,6 +894,8 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
         }
 
         total_read += read;
+        if (total_read > fsize)
+            break;
 
         // write to file
         int written_to_file = 0;
@@ -841,10 +903,10 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
         do {
             ssize_t written = write(afd, ptr + written_to_file, read - written_to_file);
             if (written <= 0) {
-                LOG_ERROR("recv: %s", strerror(errno));
+                LOG_DEBUG("recv: %s", strerror(errno));
                 if (close(afd) != 0) {
                     LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-                    LOG_ERROR("[DB] close: %s", strerror(errno));
+                    LOG_DEBUG("[DB] close: %s", strerror(errno));
                 }
                 rollback_auction_dir_creation();
                 unlock_db_mutex("create_auction");
@@ -855,18 +917,20 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
         } while (written_to_file < read);
     }
 
+    // Write last block without the \n 
+
     if (close(afd) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-        LOG_ERROR("[DB] close: %s", strerror(errno));
+        LOG_DEBUG("[DB] close: %s", strerror(errno));
     };
 
     /**
-    * Register user's auction
+    * Register user auction
     */
     sprintf(tmp_path, "USERS/%6s/HOSTED/%03d.txt", uid, auc_id);
     int tmp_fd;
     if ((tmp_fd = open(tmp_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
-        LOG_ERROR("[DB] open: %s", strerror(errno));
+        LOG_DEBUG("[DB] open: %s", strerror(errno));
         rollback_auction_dir_creation();
         unlock_db_mutex("create_auction");
         return -1;
@@ -874,7 +938,7 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
 
     if (close(tmp_fd) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-        LOG_ERROR("[DB] close: %s", strerror(errno));
+        LOG_DEBUG("[DB] close: %s", strerror(errno));
     };
 
     unlock_db_mutex("create_auction");
@@ -888,14 +952,15 @@ int close_auction(char *aid) {
     char auction_path[128];
     sprintf(auction_path, "AUCTIONS/%3s/START_%3s.txt", aid, aid);
     if ((fp = fopen(auction_path, "r")) == NULL) {
-        LOG_ERROR("[DB] Failed reading from auction %s information file, databsae might be corrupted", aid);
+        LOG_DEBUG("[DB] Failed reading from auction %s information file, databsae might be corrupted", aid);
         unlock_db_mutex(aid);
         return 1;
     }
 
     char auction_info[256];
     if (fgets(auction_info, 128, fp) == NULL) {
-        LOG_ERROR("[DB] Failed reading from auction %s information file, database might be corrupted", aid);
+        LOG_DEBUG("[DB] Failed reading from auction %s information file, database might be corrupted", aid);
+        fclose(fp);
         unlock_db_mutex(aid);
         return 1;
     };
@@ -906,36 +971,36 @@ int close_auction(char *aid) {
     * Calculate the time the auction remained active
     */
     // read last entry in START file (the start unix timestamp of the auction)
-    char *start_unix_time = strtok(auction_info, " ");
+    char *start_time = strtok(auction_info, " ");
     for (int i = 0; i < 6; ++i) {
-        start_unix_time = strtok(NULL, " ");
+        start_time = strtok(NULL, " ");
     }
 
-    start_unix_time = strtok(NULL, "\n");
+    start_time = strtok(NULL, "\n");
 
-    if (start_unix_time == NULL) {
+    if (start_time == NULL) {
         LOG_DEBUG("[DB] Got a badly formatted START_%3s file", aid );
         unlock_db_mutex(aid);
         return -1;
     }
 
     // convert to long
-    long start_unix_time_l = atol(start_unix_time);
+    long start_time_l = atol(start_time);
 
     // failed converting (not a numeric type)
-    if (start_unix_time_l == 0) {
+    if (start_time_l == 0) {
         LOG_DEBUG("[DB] Got a badly formatted START_%3s file", aid );
         unlock_db_mutex(aid);
         return -1;
     }
 
     // current time
-    time_t unix_curr_time = time(NULL);
+    time_t curr_time = time(NULL);
     // seconds the auction remained open
-    long end_sec_time = (long)unix_curr_time - start_unix_time_l;
+    long end_sec_time = (long)curr_time - start_time_l;
 
     struct tm *tm_time;
-    if ((tm_time = gmtime(&unix_curr_time)) == NULL) {
+    if ((tm_time = gmtime(&curr_time)) == NULL) {
         LOG_DEBUG("[DB] Couldn't get current time information")
         unlock_db_mutex(aid);
         return -1;
@@ -962,7 +1027,7 @@ int close_auction(char *aid) {
     // we do this because we usually use file streams to write to files :l
     if (close(fd) != 0) {
         LOG_DEBUG("[DB] Failed closing auction %s creation file descriptor, resources may be leaking", aid);
-        LOG_ERROR("[DB] open: %s", strerror(errno));
+        LOG_DEBUG("[DB] open: %s", strerror(errno));
     }
 
     /**
@@ -999,7 +1064,7 @@ int get_last_bid() {
 int lock_db_mutex(char *resource) {
     if (pthread_mutex_lock(&db_mutex) != 0) {
         LOG_DEBUG("[DB] Failed locking mutex for resource %s", resource);
-        LOG_ERROR("pthread_mutex_lock");
+        LOG_ERROR("Failed pthread_mutex_lock, fatal...");
         exit(1);
     }    
 
@@ -1009,7 +1074,7 @@ int lock_db_mutex(char *resource) {
 int unlock_db_mutex(char *resource) {
     if (pthread_mutex_unlock(&db_mutex) != 0) {
         LOG_DEBUG("[DB] Failed unlocking mutex for resource %s", resource);
-        LOG_ERROR("pthread_mutex_lock");
+        LOG_ERROR("Failed pthread_mutex_lock, fatal...");
         exit(1);
     }    
     return 0;

@@ -8,7 +8,7 @@
 #include "tcp_command_table.h"
 
 struct tcp_command_mappings {
-    const char cmd_op[3];
+    const char cmd_op[5];
     tcp_handler_fn func;
 };
 
@@ -18,10 +18,10 @@ struct tcp_command_mappings {
 static 
 const 
 struct tcp_command_mappings tcp_command_table[] = {
-    {"OPA", handle_open},
-    {"CLS", handle_close},
-    {"SAS", handle_show_asset},
-    {"BID", handle_bid},
+    {"OPA ", handle_open},
+    {"CLS ", handle_close},
+    {"SAS ", handle_show_asset},
+    {"BID ", handle_bid},
 };
 
 
