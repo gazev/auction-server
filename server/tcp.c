@@ -554,6 +554,159 @@ int handle_show_asset(struct tcp_client *client) {
 
 int handle_bid(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [BID] Entered handler", client->ipv4, client->port);
+
+    char buff[UID_SIZE+1+PASSWORD_SIZE+1+AID_SIZE+1];
+    int err = read_tcp_stream(buff, UID_SIZE+1+PASSWORD_SIZE+1+AID_SIZE+1, client);
+    if (err){
+        LOG_VERBOSE("FAILED READING FROM TCP STREAM");
+    }
+
+    /* read bid value (byte by byte)*/
+    char *byte; // byte currently reading
+    char value[MAX_BID_VALUE]; // overall value
+    int read = 0; // number of bytes read
+
+    while (*byte != ' ' && read< MAX_BID_VALUE) {
+
+        ssize_t r = recv(client->conn_fd, byte, 1, 0);
+
+        if (r < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                LOG_VERBOSE("%s:%d - [OPA] Timed out client", client->ipv4, client->port);
+            } else {
+                LOG_VERBOSE("%s:%d - [OPA] Failed reading from socket", client->ipv4, client->port);
+                LOG_ERROR("%s:%d - recv: %s", client->ipv4, client->port, strerror(errno));
+            }
+            return 0;
+        }
+        if (r == 0) {
+            LOG_VERBOSE("%s:%d - [OPA] Connection closed by client", client->ipv4, client->port);
+            return 0;
+        }
+
+        //if the first digit is a 0 ignore
+        if (read == 0 && *byte=='0')
+            continue;
+        //if someone sent a letter in the middle
+        if (!(*byte>='0' && *byte <= '9')) {
+            LOG_VERBOSE("%s:%d - [CLS] Invalid value", client->ipv4, client->port);
+            return 0;
+        }
+
+        value[read] = *byte;
+        read += 1;
+    }
+    value[read] = '\0';
+
+    /**
+    * Validate message arguments
+    */
+    char *uid = strtok(buff, " "); 
+    char *passwd = strtok(NULL, " ");
+    char *aid = strtok(NULL, "\n");
+
+    if (uid == NULL) {
+        LOG_VERBOSE("%s:%d - [CLS] No UID", client->ipv4, client->port);
+        return CLS_BAD_ARGS;
+    }
+
+    if (!is_valid_uid(uid)) {
+        LOG_VERBOSE("%s:%d - [CLS] Invalid UID", client->ipv4, client->port);
+        return CLS_BAD_ARGS;
+    }
+
+    if (passwd == NULL) {
+        LOG_VERBOSE("%s:%d - [CLS] No password", client->ipv4, client->port);
+        return CLS_BAD_ARGS;
+    }
+
+    if (!is_valid_passwd(passwd)) {
+        LOG_VERBOSE("%s:%d - [CLS] Invalid password", client->ipv4, client->port);
+        return CLS_BAD_ARGS;
+    }
+ 
+    if (aid == NULL) {
+        LOG_VERBOSE("%s:%d - [CLS] No AID", client->ipv4, client->port);
+        return CLS_BAD_ARGS;
+    }
+
+    if (!is_valid_aid(aid)) {
+        LOG_VERBOSE("%s:%d - [CLS] Invalid AID", client->ipv4, client->port);
+        return CLS_BAD_ARGS;
+    }
+
+    /**
+    * Validate user and auction in database 
+    */
+    // check user against db
+    if (!exists_user(uid) || !is_user_logged_in(uid) || !is_authentic_user(uid, passwd)) {
+        LOG_VERBOSE("%s:%d - [CLS] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
+        char *resp = "RBD NLG\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    // check if auction exists
+    if (!exists_auction(aid)) {
+        LOG_VERBOSE("%s:%d - [CLS] Auction %s doesn't exist", client->ipv4, client->port, aid);
+        char *resp = "RBD ERR\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    // read auction information 
+    char auction_info[256];
+    if (get_auction_info(aid, auction_info, 256) != 0) {
+        LOG_VERBOSE("%s:%d - [CLS] Failed retrieving information about action %s", client->ipv4, client->port, aid);
+        char *resp = "RBD ERR\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    // check if user is the owner of desired auction
+    char *owner_uid = strtok(auction_info, " ");
+    if (strcmp(owner_uid, uid) == 0) {
+        LOG_VERBOSE("%s:%d - [CLS] Invalid owner for auction %s", client->ipv4, client->port, aid);
+        char *resp = "RBD ILG\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    // check if auction is already finished
+    if (is_auction_finished(aid)) {
+        LOG_VERBOSE("%s:%d - [CLS] Auction %s has already finished", client->ipv4, client->port, aid);
+        char *resp = "RBD NOK\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    int start_bid;
+    int last_bid = get_last_bid(aid, last_bid);
+    if (last_bid == 0 )
+        last_bid = start_bid;
+
+
+    //check if bid is acceptable
+    if (value <= last_bid) {
+        char *resp = "RBD REF\n";
+        if (send_tcp_response(resp, 8, client) != 0) {
+            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    //TODO
+
     return 0;
 }
 

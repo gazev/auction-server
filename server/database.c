@@ -990,6 +990,12 @@ int close_auction(char *aid) {
     return 0;
 }
 
+//TODO
+int get_last_bid() {
+    //TODO
+    return ;
+}
+
 int lock_db_mutex(char *resource) {
     if (pthread_mutex_lock(&db_mutex) != 0) {
         LOG_DEBUG("[DB] Failed locking mutex for resource %s", resource);
