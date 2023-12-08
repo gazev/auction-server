@@ -135,10 +135,11 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
         close(asset_fd);
         close(conn_fd);
         if (errno == EPIPE)
-            return ERR_REQUESTING_UDP;
+        LOG_DEBUG("Connection closed");
+            return ERR_REQUESTING_TCP;
 
         if (err == ERR_TCP_WRITE)
-            return ERR_REQUESTING_UDP;
+            return ERR_REQUESTING_TCP;
 
         if (err == ERR_READ_AF)
             return ERR_READ_ASSET_FILE;

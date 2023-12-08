@@ -54,7 +54,7 @@ int handle_login (char *input, struct client_state *client, char response[MAX_SE
     * Expected format: RLI status
     **/
     char buffer[32] = {0};
-    int err = receive_udp_response(buffer, 32, client);
+    int err = receive_udp_response(buffer, 31, client);
     if (err != 0) {
         if (err == UDP_ERR_NO_LF_MESSAGE)
             return ERR_UNKNOWN_ANSWER;
@@ -126,7 +126,7 @@ int handle_logout (char *input, struct client_state *client, char response[MAX_S
     * Expected format: RLO status
     **/
     char buffer[32] = {0};
-    int err = receive_udp_response(buffer, 32, client);
+    int err = receive_udp_response(buffer, 31, client);
     if (err != 0) {
         if (err == UDP_ERR_NO_LF_MESSAGE)
             return ERR_UNKNOWN_ANSWER;
@@ -195,7 +195,7 @@ int handle_unregister (char *input, struct client_state *client, char response[M
     * Expected format: RUR status
     **/
     char buffer[32] = {0};
-    int err = receive_udp_response(buffer, 32, client);
+    int err = receive_udp_response(buffer, 31, client);
     if (err != 0) {
         if (err == UDP_ERR_NO_LF_MESSAGE) {
             return ERR_UNKNOWN_ANSWER;
@@ -279,7 +279,7 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
     * Expected format: RLS status [AID state]* 
     **/
     char buffer[8192] = {0}; 
-    int err = receive_udp_response(buffer, 8192, client);
+    int err = receive_udp_response(buffer, 8191, client);
     if (err != 0) {
         if (err == UDP_ERR_NO_LF_MESSAGE)
             return ERR_UNKNOWN_ANSWER;
@@ -402,7 +402,7 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
     * Expected format: RMA status [AID state]* 
     **/
     char buffer[8192] = {0}; 
-    int err = receive_udp_response(buffer, 8192, client);
+    int err = receive_udp_response(buffer, 8191, client);
     if (err != 0) {
         if (err == UDP_ERR_NO_LF_MESSAGE)
             return ERR_UNKNOWN_ANSWER;
@@ -539,7 +539,7 @@ int handle_show_record (char *input, struct client_state *client, char response[
     * [BID INFO] comments explaining in parse
     **/
     char buffer[65535] = {0}; // this reponse might fill an entire datagram... 
-    int err = receive_udp_response(buffer, 65535, client);
+    int err = receive_udp_response(buffer, 65534, client);
     if (err != 0) {
         if (err == UDP_ERR_NO_LF_MESSAGE)
             return ERR_UNKNOWN_ANSWER;
