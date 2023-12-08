@@ -1027,13 +1027,145 @@ int close_auction(char *aid) {
     return 0;
 }
 
+int get_last_bid(char *aid) {
+    
+    lock_db_mutex("get last bid");
+
+    char bid_path[128];
+    sprintf(bid_path, "AUCTIONS/%3s/BIDS", aid);
+
+    struct dirent **entries;
+
+    int n_entries = scandir(bid_path, &entries, NULL, alphasort);
+    if (n_entries < 0) {
+        LOG_DEBUG("[DB] Failed retrieving user auctions");
+        LOG_DEBUG("[DB] scandir: %s", strerror(errno));
+        unlock_db_mutex("list");
+        return -1;
+    }
+
+    if (n_entries == 0)
+        return 0;
+    
+    int last_bid;
+    if (sscanf(entries[n_entries]->d_name, "%d.txt", &last_bid) != 1)
+        last_bid = -1; // set for error 
+
+    //free entries
+    for (int i=0; i<n_entries; i++)
+        free(entries[i]);
+    free(entries);
+
+    unlock_db_mutex("get last bid");
+    return last_bid;
+}
+
+int bid(char *aid, char *uid, int value) {
+
+    lock_db_mutex("bid");
+
+    char bid_path[128];
+    sprintf(bid_path, "AUCTIONS/%3s/BIDS/%d.txt", aid, value);
+
+    FILE *fp;
+    // get starting time
+    char auction_path[128];
+    sprintf(auction_path, "AUCTIONS/%3s/START_%3s.txt", aid, aid);
+    if ((fp = fopen(auction_path, "r")) == NULL) {
+        LOG_DEBUG("[DB] Failed reading from auction %s information file, databsae might be corrupted", aid);
+        unlock_db_mutex(aid);
+        return 1;
+    }
+
+    char auction_info[256];
+    if (fgets(auction_info, 128, fp) == NULL) {
+        LOG_DEBUG("[DB] Failed reading from auction %s information file, database might be corrupted", aid);
+        fclose(fp);
+        unlock_db_mutex(aid);
+        return 1;
+    };
+    fclose(fp);
+
+    // read last entry in START file (the start unix timestamp of the auction)
+    char *start_time = strtok(auction_info, " ");
+    for (int i = 0; i < 6; ++i) {
+        start_time = strtok(NULL, " ");
+    }
+
+    start_time = strtok(NULL, "\n");
+
+    if (start_time == NULL) {
+        LOG_DEBUG("[DB] Got a badly formatted START_%3s file", aid );
+        unlock_db_mutex(aid);
+        return -1;
+    }
+
+    // convert to long
+    long start_time_l = atol(start_time);
+
+    // failed converting (not a numeric type)
+    if (start_time_l == 0) {
+        LOG_DEBUG("[DB] Got a badly formatted START_%3s file", aid );
+        unlock_db_mutex(aid);
+        return -1;
+    }
+
+    // current time
+    time_t curr_time = time(NULL);
+    // seconds elapsed since the beginning of the auction
+    long bid_sec_time = (long)curr_time - start_time_l;
+
+    struct tm *tm_time;
+    if ((tm_time = gmtime(&curr_time)) == NULL) {
+        LOG_DEBUG("[DB] Couldn't get current time information")
+        unlock_db_mutex(aid);
+        return -1;
+    }
+
+    char bid_datetime[128];
+    sprintf(bid_datetime, "%4d-%02d-%02d %02d:%02d:%02d", 
+                        tm_time->tm_year + 1900, tm_time->tm_mon + 1, tm_time->tm_mday,
+                        tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
+
+
+    int fd;
+    if ((fd = open(bid_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
+        LOG_DEBUG("[DB] Failed creating bid file %s %d", aid, value);
+        unlock_db_mutex("bid");
+        return -1;
+    }
+    if (close(fd) != 0) {
+        LOG_DEBUG("[DB] Failed closing bid file %s, resources may be leaking", aid);
+    }
+
+
+    char info[256];
+    sprintf(info, "%s %s %ld\n", uid, bid_datetime, bid_sec_time);
+
+    if ((fp = fopen(bid_path, "w")) == NULL) {
+        LOG_DEBUG("[DB] Failed writting information to auction bid %s END file", aid);
+        unlock_db_mutex("bid");
+        return -1;
+    }
+
+    if (fputs(info, fp) < 0) {
+        LOG_DEBUG("[DB] Failed writting information to auction bid %s END file", aid);
+        fclose(fp);
+        unlock_db_mutex("bid");
+        return -1;
+    }
+
+    fclose(fp);
+    unlock_db_mutex("bid");
+    return 0;
+}
+
 int lock_db_mutex(char *resource) {
     if (pthread_mutex_lock(&db_mutex) != 0) {
         LOG_DEBUG("[DB] Failed locking mutex for resource %s", resource);
         LOG_ERROR("Failed pthread_mutex_lock, fatal...");
         exit(1);
     }    
-
     return 0;
 }
 

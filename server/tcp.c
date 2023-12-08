@@ -606,6 +606,183 @@ int handle_show_asset(struct tcp_client *client) {
 
 int handle_bid(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [BID] Entered handler", client->ipv4, client->port);
+
+    char buff[UID_SIZE+1+PASSWORD_SIZE+1+AID_SIZE+1];
+    int err = read_tcp_stream(buff, UID_SIZE+1+PASSWORD_SIZE+1+AID_SIZE+1, client->conn_fd);
+    if (err){
+        LOG_VERBOSE("FAILED READING FROM TCP STREAM");
+    }
+
+    /* read bid value (byte by byte)*/
+    char byte = '0'; // byte currently reading
+    char value[MAX_BID_VALUE]; // overall value
+    int read = 0; // number of bytes read
+
+    while (byte != '\n' && read< MAX_BID_VALUE) {
+
+        ssize_t r = recv(client->conn_fd, &byte, 1, 0);
+
+        if (r < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                LOG_VERBOSE("%s:%d - [BID] Timed out client", client->ipv4, client->port);
+            } else {
+                LOG_VERBOSE("%s:%d - [BID] Failed reading from socket", client->ipv4, client->port);
+                LOG_ERROR("%s:%d - recv: %s", client->ipv4, client->port, strerror(errno));
+            }
+            return 0;
+        }
+        if (r == 0) {
+            LOG_VERBOSE("%s:%d - [BID] Connection closed by client", client->ipv4, client->port);
+            return 0;
+        }
+
+        //if the first digit is a 0 ignore
+        if (read == 0 && byte=='0')
+            continue;
+        //if someone sent a letter in the middle
+        if (!(byte>='0' && byte <= '9')) {
+            LOG_VERBOSE("%s:%d - [BID] Invalid value", client->ipv4, client->port);
+            return 0;
+        }
+
+        value[read] = byte;
+        read += 1;
+    }
+    value[read] = '\0';
+    int bid_value = atoi(value);
+
+    /**
+    * Validate message arguments
+    */
+    char *uid = strtok(buff, " "); 
+    char *passwd = strtok(NULL, " ");
+    char *aid = strtok(NULL, "\n");
+
+    if (uid == NULL) {
+        LOG_VERBOSE("%s:%d - [BID] No UID", client->ipv4, client->port);
+        return BID_BAD_ARGS;
+    }
+
+    if (!is_valid_uid(uid)) {
+        LOG_VERBOSE("%s:%d - [BID] Invalid UID", client->ipv4, client->port);
+        return BID_BAD_ARGS;
+    }
+
+    if (passwd == NULL) {
+        LOG_VERBOSE("%s:%d - [BID] No password", client->ipv4, client->port);
+        return BID_BAD_ARGS;
+    }
+
+    if (!is_valid_passwd(passwd)) {
+        LOG_VERBOSE("%s:%d - [BID] Invalid password", client->ipv4, client->port);
+        return BID_BAD_ARGS;
+    }
+ 
+    if (aid == NULL) {
+        LOG_VERBOSE("%s:%d - [BID] No AID", client->ipv4, client->port);
+        return BID_BAD_ARGS;
+    }
+
+    if (!is_valid_aid(aid)) {
+        LOG_VERBOSE("%s:%d - [BID] Invalid AID", client->ipv4, client->port);
+        return BID_BAD_ARGS;
+    }
+
+    /**
+    * Validate user and auction in database 
+    */
+    // check user against db
+    if (!exists_user(uid) || !is_user_logged_in(uid) || !is_authentic_user(uid, passwd)) {
+        LOG_VERBOSE("%s:%d - [BID] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
+        char *resp = "RBD NLG\n";
+        if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
+            LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    // check if auction exists
+    if (!exists_auction(aid)) {
+        LOG_VERBOSE("%s:%d - [BID] Auction %s doesn't exist", client->ipv4, client->port, aid);
+        char *resp = "RBD ERR\n";
+        if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
+            LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    // read auction information 
+    char auction_info[256];
+    if (get_auction_info(aid, auction_info, 256) != 0) {
+        LOG_VERBOSE("%s:%d - [BID] Failed retrieving information about action %s", client->ipv4, client->port, aid);
+        char *resp = "RBD ERR\n";
+        if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
+            LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    //"%s %s %s %d %d %s %ld\n", uid, name, fname, sv, ta, str_time, unix_start_time
+    char *owner_uid = strtok(auction_info, " ");
+    char *starting_value;
+    for (int i=0; i<2; i++) //skip name and fname
+        starting_value = strtok(NULL, " ");
+    starting_value = strtok(NULL, " ");
+
+    // check if user is the owner of desired auction
+    if (strcmp(owner_uid, uid) == 0) {
+        LOG_VERBOSE("%s:%d - [BID] Invalid owner for auction %s", client->ipv4, client->port, aid);
+        char *resp = "RBD ILG\n";
+        if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
+            LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    // check if auction is already finished
+    if (is_auction_finished(aid)) {
+        LOG_VERBOSE("%s:%d - [BID] Auction %s has already finished", client->ipv4, client->port, aid);
+        char *resp = "RBD NOK\n";
+        if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
+            LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    if (!is_valid_start_value(starting_value)){
+        LOG_VERBOSE("%s:%d - [BID] got a non numeric value from the starting value in file %s", client->ipv4, client->port, aid);
+        return BID_BAD_ARGS;
+    }
+
+    int start_bid = atoi(starting_value);
+    int last_bid = get_last_bid(aid);
+    if (last_bid < 0) {
+        LOG_VERBOSE("%s:%d - [BID] failled getting last bid %s", client->ipv4, client->port, aid);
+        return BID_BAD_ARGS;
+    }
+    if (last_bid == 0 )
+        last_bid = start_bid;
+
+
+    //check if bid is acceptable
+    if (bid_value <= last_bid) {
+        char *resp = "RBD REF\n";
+        if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
+            LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);
+        }
+        return 0;
+    }
+
+    if (bid(aid, uid, bid_value)){
+        LOG_VERBOSE("%s:%d - [RBD] got a non numeric value from the starting value in file %s", client->ipv4, client->port, aid);
+        return BID_BAD_ARGS;
+    }
+
+    LOG_VERBOSE("%s:%d - [BID] Sucessfull bid %s", client->ipv4, client->port, aid);
+    char *resp = "RBD ACC\n";
+    if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
+        LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);
+    }
     return 0;
 }
 

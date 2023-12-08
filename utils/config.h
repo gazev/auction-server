@@ -11,6 +11,8 @@
 #define START_VALUE_LEN 6 
 #define TIME_ACTIVE_LEN 5
 
+#define MAX_BID_VALUE 6
+
 #define FNAME_LEN 24
 #define FSIZE_STR_LEN 8
 

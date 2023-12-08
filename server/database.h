@@ -18,6 +18,8 @@ int get_auction_info(char *aid, char *buff, int n);
 int get_user_auctions(char *uid, char *buff);
 int get_auctions_list(char *buff);
 
+int get_last_bid(char *aid);
+
 /**
 * DB action API 
 */
@@ -29,5 +31,7 @@ int unregister_user(char *uid);
 
 int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int fisze, int fd);
 int close_auction(char *aid);
+
+int bid(char *aid, char *uid, int value);
 
 #endif
