@@ -19,7 +19,7 @@ int get_user_auctions(char *uid, char *buff);
 int get_auctions_list(char *buff);
 
 int get_last_bid(char *aid);
-
+int get_user_bids(char *uid, char *response);
 /**
 * DB action API 
 */

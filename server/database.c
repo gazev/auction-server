@@ -1184,6 +1184,55 @@ int bid(char *aid, char *uid, int value) {
     return 0;
 }
 
+int get_user_bids(char *uid, char *response) {
+    lock_db_mutex("get user bids");
+
+    char bids_dir[128] = {0};
+    sprintf(bids_dir, "USERS/%.6s/BIDDED", uid);
+
+    struct dirent **entries;
+
+    int n_entries = scandir(bids_dir, &entries, NULL, alphasort);
+    if (n_entries < 0) {
+        LOG_DEBUG("[DB] Failed retrieving user auctions");
+        LOG_DEBUG("[DB] scandir: %s", strerror(errno));
+        unlock_db_mutex("get user bids");
+        return -1;
+    }
+    
+    int written = 0;
+    char curr_auc_path[128];
+    int check_fd;
+    for (int i = 0; i < n_entries; i++) {
+        if (entries[i]->d_name[0] == '.') continue;
+
+        sprintf(curr_auc_path, "AUCTIONS/%.3s/END_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
+        char auc_status[8];
+        if ((check_fd = open(curr_auc_path, 0, SERVER_MODE)) < 0) {
+            sprintf(auc_status, " %.3s 1", entries[i]->d_name); // not ended
+        } else {
+            sprintf(auc_status, " %.3s 0", entries[i]->d_name); // ended
+            if (close(check_fd) != 0) {
+                LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking")
+                LOG_DEBUG("[DB] closedir: %s", strerror(errno));
+            };
+        }
+
+        strcat(response, auc_status);
+        written += strlen(auc_status);
+
+        free(entries[i]);
+    }
+
+    free(entries);
+
+    strcat(response, "\n");
+    written += 1;
+
+    unlock_db_mutex("get user bids");
+    return written;
+}
+
 int lock_db_mutex(char *resource) {
     if (pthread_mutex_lock(&db_mutex) != 0) {
         LOG_DEBUG("[DB] Failed locking mutex for resource %s", resource);
