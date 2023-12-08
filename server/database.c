@@ -114,7 +114,10 @@ int update_database() {
     * Iteratively check if each auction has already ended
     */
     for (int i = 0; i < n_entries; i++) {
-        if (entries[i]->d_name[0] == '.') continue;
+        if (entries[i]->d_name[0] == '.') {
+            free(entries[i]);
+            continue;
+        }
 
         char bid_path[32];
         sprintf(bid_path, "AUCTIONS/%.3s/END_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
@@ -125,6 +128,7 @@ int update_database() {
                 LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
                 LOG_DEBUG("[DB] close: %s", strerror(errno));
             }
+            free(entries[i]);
             continue;
         }
 
@@ -136,6 +140,7 @@ int update_database() {
         if ((fp = fopen(bid_path, "r")) == NULL) {
             LOG_DEBUG("[DB] Failed opening bid information file");
             LOG_DEBUG("[DB] fopen: %s", strerror(errno));
+            free(entries[i]);
             continue;
         }
 
@@ -158,14 +163,16 @@ int update_database() {
             start_time = strtok(NULL, " ");
         }
 
-        // valida both
+        // valid both
         if (time_active == NULL || start_time == NULL) {
             LOG_DEBUG("Got invaild time active and start time from bid file %s", entries[i]->d_name);
+            free(entries[i]);
             continue;
         }
 
         if (!is_valid_time_active(time_active)) {
             LOG_DEBUG("Got invaild time active from bid file %s", entries[i]->d_name);
+            free(entries[i]);
             continue;
         }
 
@@ -176,10 +183,12 @@ int update_database() {
         if (start_time_l == 0) {
             LOG_DEBUG("Got invaild start time from bid file %s", entries[i]->d_name);
         }
+
         /** 
         * Check for auction expiration, if not expired, continue
         */
         if (curr_time - start_time_l < time_active_i) {
+            free(entries[i]);
             continue;
         }
 
@@ -193,6 +202,7 @@ int update_database() {
         if ((close_fd = open(bid_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
             LOG_DEBUG("[DB] Failed creating END_%.3s.txt file", entries[i]->d_name);
             LOG_DEBUG("[DB] open: %s", strerror(errno));
+            free(entries[i]);
             continue;
         }
 
@@ -205,6 +215,7 @@ int update_database() {
         struct tm *tm_time;
         if ((tm_time = gmtime(&curr_time)) == NULL) {
             LOG_DEBUG("[DB] Couldn't get current time information")
+            free(entries[i]);
             continue;
         }
 
@@ -222,12 +233,16 @@ int update_database() {
         if ((fp = fopen(bid_path, "w")) == NULL) {
             LOG_DEBUG("[DB] Failed opening bid end information file");
             LOG_DEBUG("[DB] fopen: %s", strerror(errno));
+            free(entries[i]);
             continue;
         }
 
         fputs(end_info, fp);
         fclose(fp);
+        free(entries[i]);
     }
+
+    free(entries);
 
     unlock_db_mutex("list");
     return 0;
@@ -437,11 +452,10 @@ int get_auctions_list(char *buff) {
 * Logs in the user with uid. Returns 0 on success and -1 on failure
 */
 int log_in_user(char *uid) {
-    char user_login_path[64];
-    int fd;
-
     lock_db_mutex(uid);
 
+    int fd;
+    char user_login_path[64];
     sprintf(user_login_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if ((fd = open(user_login_path, O_CREAT, SERVER_MODE)) == -1) {
         LOG_DEBUG("[DB] Couldn't create login file for user %s", uid);
@@ -480,10 +494,10 @@ int log_out_user(char *uid) {
 * Creates a user in the DB. Returns 0 on success and -1 on failure
 */
 int register_user(char *uid, char *passwd) {
-    char user_file_path[64];
-    
     lock_db_mutex(uid);
+    
     // create user directory (e.g root/USERS/123456)
+    char user_file_path[64];
     sprintf(user_file_path, "USERS/%6s", uid);
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
@@ -575,10 +589,10 @@ int register_user(char *uid, char *passwd) {
 * this project
 */
 int unregister_user(char *uid) {
-    char user_file_path[64];
-
     lock_db_mutex(uid);
+
     // remove user's login
+    char user_file_path[64];
     sprintf(user_file_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if (remove(user_file_path) != 0) {
         LOG_DEBUG("[DB] Failed removing login file for user %s", uid);
@@ -605,12 +619,11 @@ int unregister_user(char *uid) {
 * Returns 1 if provided password matches the password stored for user with uid
 */
 int is_authentic_user(char *uid, char *passwd) {
+    lock_db_mutex(uid);
+
     FILE *fp;
     char passwd_path_file[64];
     char stored_password[9];
-
-    lock_db_mutex(uid);
-
     sprintf(passwd_path_file, "USERS/%6s/%6s_pass.txt", uid, uid);
     if ((fp = fopen(passwd_path_file, "r")) == NULL) {
         unlock_db_mutex(uid);
@@ -1028,7 +1041,6 @@ int close_auction(char *aid) {
 }
 
 int get_last_bid(char *aid) {
-    
     lock_db_mutex("get last bid");
 
     char bid_path[128];
@@ -1043,13 +1055,10 @@ int get_last_bid(char *aid) {
         unlock_db_mutex("list");
         return -1;
     }
-
-    if (n_entries == 0)
-        return 0;
     
     int last_bid;
-    if (sscanf(entries[n_entries]->d_name, "%d.txt", &last_bid) != 1)
-        last_bid = -1; // set for error 
+    if (sscanf(entries[n_entries - 1]->d_name, "%d.txt", &last_bid) != 1)
+        last_bid = 9; // set for error 
 
     //free entries
     for (int i=0; i<n_entries; i++)
@@ -1061,14 +1070,10 @@ int get_last_bid(char *aid) {
 }
 
 int bid(char *aid, char *uid, int value) {
-
     lock_db_mutex("bid");
 
-    char bid_path[128];
-    sprintf(bid_path, "AUCTIONS/%3s/BIDS/%d.txt", aid, value);
-
-    FILE *fp;
     // get starting time
+    FILE *fp;
     char auction_path[128];
     sprintf(auction_path, "AUCTIONS/%3s/START_%3s.txt", aid, aid);
     if ((fp = fopen(auction_path, "r")) == NULL) {
@@ -1084,6 +1089,7 @@ int bid(char *aid, char *uid, int value) {
         unlock_db_mutex(aid);
         return 1;
     };
+
     fclose(fp);
 
     // read last entry in START file (the start unix timestamp of the auction)
@@ -1093,7 +1099,6 @@ int bid(char *aid, char *uid, int value) {
     }
 
     start_time = strtok(NULL, "\n");
-
     if (start_time == NULL) {
         LOG_DEBUG("[DB] Got a badly formatted START_%3s file", aid );
         unlock_db_mutex(aid);
@@ -1129,18 +1134,22 @@ int bid(char *aid, char *uid, int value) {
 
 
     int fd;
+    char bid_path[128];
+    sprintf(bid_path, "AUCTIONS/%3s/BIDS/%d.txt", aid, value);
     if ((fd = open(bid_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
         LOG_DEBUG("[DB] Failed creating bid file %s %d", aid, value);
+        LOG_DEBUG("close: %s", strerror(errno));
         unlock_db_mutex("bid");
         return -1;
     }
+
     if (close(fd) != 0) {
         LOG_DEBUG("[DB] Failed closing bid file %s, resources may be leaking", aid);
+        LOG_DEBUG("close: %s", strerror(errno));
     }
 
-
-    char info[256];
-    sprintf(info, "%s %s %ld\n", uid, bid_datetime, bid_sec_time);
+    char bid_info[256];
+    sprintf(bid_info, "%s %s %ld\n", uid, bid_datetime, bid_sec_time);
 
     if ((fp = fopen(bid_path, "w")) == NULL) {
         LOG_DEBUG("[DB] Failed writting information to auction bid %s END file", aid);
@@ -1148,7 +1157,7 @@ int bid(char *aid, char *uid, int value) {
         return -1;
     }
 
-    if (fputs(info, fp) < 0) {
+    if (fputs(bid_info, fp) < 0) {
         LOG_DEBUG("[DB] Failed writting information to auction bid %s END file", aid);
         fclose(fp);
         unlock_db_mutex("bid");
@@ -1156,6 +1165,16 @@ int bid(char *aid, char *uid, int value) {
     }
 
     fclose(fp);
+
+    int ufd;
+    char user_bidded[128];
+    sprintf("USERS/%.6s/BIDDED/%.3s.txt", uid, aid);
+    if ((ufd = open(user_bidded, O_CREAT, SERVER_MODE)) < 0) {
+        LOG_DEBUG("[DB] Failed creating bid file for user %s on auction %s", uid, aid);
+        unlock_db_mutex("bid");
+        return -1;
+    }
+
     unlock_db_mutex("bid");
     return 0;
 }
