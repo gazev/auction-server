@@ -450,7 +450,7 @@ int handle_close(struct tcp_client *client) {
 
     // inform user of success
     char *resp = "RCL OK\n";
-    if (send_tcp_message(resp, 11, client->conn_fd) != 0) {
+    if (send_tcp_message(resp, 7, client->conn_fd) != 0) {
         LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL OK", client->ipv4, client->port);
         if (errno == EPIPE)
             LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
@@ -606,6 +606,7 @@ int handle_show_asset(struct tcp_client *client) {
 
 int handle_bid(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [BID] Entered handler", client->ipv4, client->port);
+    update_database();
 
     char buff[32] = {0};
     int err = read_tcp_stream(buff, UID_SIZE+1+PASSWORD_SIZE+1+AID_SIZE+1, client->conn_fd);

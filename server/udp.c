@@ -371,7 +371,7 @@ int handle_my_bids(char *input, struct udp_client *client, char *response, size_
     // check if user is logged in
     if(!is_user_logged_in(uid)) {
         LOG_VERBOSE("%s:%d - [LMB] User %s isn't logged in", client->ipv4, client->port, uid);
-        sprintf(response, "LMB NLG\n");
+        sprintf(response, "RMB NLG\n");
         *response_len = 8;
         return 0;
     }
@@ -382,13 +382,13 @@ int handle_my_bids(char *input, struct udp_client *client, char *response, size_
     int written = get_user_bids(uid, response);
     if (written < 0) {
         LOG_VERBOSE("%s:%d - [LMB] Failed retrieving user %s auctions", client->ipv4, client->port, uid);
-        sprintf(response, "RMA ERR\n");
+        sprintf(response, "RMB ERR\n");
         *response_len = 8;
         return 0;
     }
     if (written == 1) {
         LOG_VERBOSE("%s:%d - [LMB] User %s didnt bid yet", client->ipv4, client->port, uid);
-        sprintf(response, "RMA NOK\n");
+        sprintf(response, "RMB NOK\n");
         *response_len = 8;
         return 0;
     }

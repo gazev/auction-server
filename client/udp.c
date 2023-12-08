@@ -19,6 +19,10 @@
 */
 int handle_login (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("Entered");
+
+    // if the server goes down while we
+    // are running the server we need to login again
+    // if we check this here we cant
     if (client->logged_in)
         return ERR_ALREADY_LOGGED_IN;
 
@@ -454,7 +458,7 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
         return ERR_UNKNOWN_ANSWER;
 
     // retrieve the actual list from the message
-    char *data = strtok(NULL, "\n");
+    char *data = strtok(NULL, "\0");
     if (data == NULL)
         return ERR_UNKNOWN_ANSWER;
 
@@ -755,9 +759,119 @@ int handle_show_record (char *input, struct client_state *client, char response[
 }
 
 
-// TODO handle_my_bids
+/**
+ * Lists all the binds done by the client (listed 5 in each line)
+*/
 int handle_my_bids (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
-    LOG_DEBUG("Entered");
+    LOG_DEBUG("Entered my bids");
+
+    if (!client->logged_in) {
+        return ERR_NOT_LOGGED_IN;
+    } 
+
+    char request[16];
+    sprintf(request, "LMB %.6s\n", client->uid);
+
+    if (send_udp_request(request, strlen(request), client) != 0) {
+        return ERR_REQUESTING_UDP;
+    }
+
+    /**
+    * Receive and validate server response
+    * Expected format: RLB status [AID state]* 
+    **/
+    char buffer[8192] = {0}; 
+    int err = receive_udp_response(buffer, 8192, client);
+    if (err != 0) {
+        if (err == UDP_ERR_NO_LF_MESSAGE)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return ERR_TIMEDOUT_UDP;
+
+        return ERR_RECEIVING_UDP;
+    }
+
+    // retrieve response protocol command 
+    char *cmd_resp = strtok(buffer, " ");
+    if (cmd_resp == NULL)
+        return ERR_UNKNOWN_ANSWER;
+
+    // validate response protocol command
+    if (strcmp(cmd_resp, "RMB") != 0)
+        return ERR_UNKNOWN_ANSWER;
+
+    // retrieve command payload
+    char *payload = strtok(NULL, "\n");
+    if (payload == NULL)
+        return ERR_UNKNOWN_ANSWER;
+
+    // ERR, the request was invalid, this means the client is broken
+    if (!strcmp(payload, "ERR")) {
+        strcpy(response, "Server returned an error status\n");
+        return 0;
+    }
+
+    // NOK, no auctions 
+    if (!strcmp(payload, "NOK")) {
+        strcpy(response, "No bids placed yet\n");
+        return 0;
+    }
+
+    // check if OK is really there (it should) 
+    char *status = strtok(payload, " ");
+    if (status == NULL)
+        return ERR_UNKNOWN_ANSWER;
+
+    // status wasn't OK (meaning we didn't get a known status)
+    if (strcmp(status, "OK") != 0)
+        return ERR_UNKNOWN_ANSWER;
+
+    // retrieve the actual list from the message
+    char *data = strtok(NULL, "\0");
+    if (data == NULL)
+        return ERR_UNKNOWN_ANSWER;
+
+    /**
+    * Build response string in the format:
+    * { | AID - State | 5* } (6 per line)
+    * Status: A - Active, C - Closed
+    */    
+    int per_line_count = 0;
+    memset(response, 0, MAX_SERVER_RESPONSE);
+    strcat(response, 
+                     "Format: |{AID - Status}| 5* (6 per line)\n"
+                     "Status: A - Active, C - Closed\n\n"
+
+                     "AS Auctions with user bids:\n");
+    char *auc_id = strtok(data, " ");
+    while (auc_id  != NULL) {
+        strcat(response, "|");
+        strcat(response, auc_id);
+
+        char *status = strtok(NULL, " ");
+        // 1 or 0
+        if (status == NULL)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (!strcmp(status, "1")) {
+            strcat(response, " - A| ");
+        } else { // we will consider strange responses also as closed
+            strcat(response, " - C| ");
+        }
+
+        per_line_count += 1;
+        if (per_line_count == 6) {
+            strcat(response, "\n");
+            per_line_count = 0;
+        }
+        auc_id = strtok(NULL, " ");
+    }
+
+    // add final \n
+    if (per_line_count != 0)
+        strcat(response, "\n");
+
     return 0;
 }
 
