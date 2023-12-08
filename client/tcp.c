@@ -626,6 +626,7 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
     char request[64];
     sprintf(request, "BID %.6s %.8s %.3s %d\n", client->uid, client->passwd, aid, bid_value);
 
+    LOG_DEBUG("%s", request);
 
      /**
     * Open connect to server with a 5s timeout socket

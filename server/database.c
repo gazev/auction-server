@@ -1058,7 +1058,7 @@ int get_last_bid(char *aid) {
     
     int last_bid;
     if (sscanf(entries[n_entries - 1]->d_name, "%d.txt", &last_bid) != 1)
-        last_bid = 9; // set for error 
+        last_bid = 0; //no bids yet 
 
     //free entries
     for (int i=0; i<n_entries; i++)
@@ -1168,12 +1168,13 @@ int bid(char *aid, char *uid, int value) {
 
     int ufd;
     char user_bidded[128];
-    sprintf("USERS/%.6s/BIDDED/%.3s.txt", uid, aid);
+    sprintf(user_bidded, "USERS/%.6s/BIDDED/%.3s.txt", uid, aid);
     if ((ufd = open(user_bidded, O_CREAT, SERVER_MODE)) < 0) {
         LOG_DEBUG("[DB] Failed creating bid file for user %s on auction %s", uid, aid);
         unlock_db_mutex("bid");
         return -1;
     }
+    close(ufd);
 
     unlock_db_mutex("bid");
     return 0;
