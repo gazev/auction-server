@@ -544,10 +544,123 @@ void rollback_asset_creation(char *fname) {
 }
 
 
-// TODO handle_bid
+/**
+* Analyses a response sent by the server to the BID command.
+* If it's a valid response returns 0 and writes corresponding result to `response`.
+* If the message is invalid returns an ERR_UNKNOWN_MESSAGE error code.
+*/
+int determine_bid_response_error(char *status, char *response) {
+    if (!strcmp(status, "ERR")) {
+        strcpy(response, "Received an error message for close command from the server\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "NLG")) {
+        strcpy(response, "User is not logged in\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "ILG")) {
+        strcpy(response, "User tried to bid on a auction started by himself\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "REF")) {
+        strcpy(response, "Bid too low\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "NOK")) {
+        strcpy(response, "Auction not active\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "ACC")) {
+        strcpy(response, "Sucessfull bid\n");
+        return 0;
+    }
+
+    return ERR_UNKNOWN_ANSWER;
+}
+
+
+/**
+ *  sends a message to the server asking to place a bid for auction
+ * 
+*/
 int handle_bid (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
-    LOG_DEBUG("Entered");
-    return 0;
+    LOG_DEBUG("Entered BID");
+
+    if (!client->logged_in) {
+        return -1;
+    }
+
+    char *aid = strtok(input, " ");
+    if (aid == NULL) {
+        return -1;
+    }
+    if (!is_valid_aid(aid)) {
+        return -1;
+    }
+    char *value = strtok(NULL, "\n");
+    if (value == NULL) {
+        return -1;
+    }
+    if (!is_valid_start_value(value)){
+        return -1;
+    }
+    int bid_value = atoi(value);
+
+    char request[64];
+    sprintf(request, "BID %.6s %.8s %.3s %d\n", client->uid, client->passwd, aid, bid_value);
+
+
+     /**
+    * Open connect to server with a 5s timeout socket
+    */
+    int conn_fd;
+    if ((conn_fd = open_tcp_connection_to_server(client)) < 0)
+        return ERR_TCP_CONN_TO_SERVER;
+
+    /**
+     * send request to server
+    */
+    if (send_tcp_message(request, strlen(request), conn_fd) != 0) {
+        close(conn_fd);
+        return ERR_REQUESTING_TCP;
+    }
+
+    /**
+     * receive server answer
+    */
+    // read the response command
+    char command[8] = {0};
+    if (read_tcp_stream(command, 4, conn_fd) != 0) {
+        close(conn_fd);
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return ERR_TIMEOUT_TCP;
+        }
+        return ERR_RECEIVING_TCP;
+    }
+
+    // if command is not RCL, message is invalid
+    if (strcmp(command, "RBD ") != 0) {
+        close(conn_fd);
+        return ERR_UNKNOWN_ANSWER;
+    }
+
+    // get RCL command status
+    char status[4] = {0};
+    if (read_tcp_stream(status, 3, conn_fd) != 0) {
+        close(conn_fd);
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return ERR_TIMEOUT_TCP;
+        }
+        return ERR_RECEIVING_TCP;
+    }
+    close(conn_fd);
+
+    return determine_bid_response_error(status, response);
 }
 
 
