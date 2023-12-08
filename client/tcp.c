@@ -525,6 +525,7 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
             return ERR_WRITE_ASSET_FILE;
     }
 
+    close(conn_fd);
     sprintf(response, "Successfully retrieved asset %s of auction %.3s\n", fname, aid);
     return 0;
 }
@@ -606,16 +607,20 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
     if (aid == NULL) {
         return ERR_NULL_ARGS;
     }
+
     if (!is_valid_aid(aid)) {
         return ERR_INVALID_AID;
     }
+
     char *value = strtok(NULL, "\n");
     if (value == NULL) {
         return ERR_NULL_ARGS;
     }
+
     if (!is_valid_start_value(value)){
         return ERR_INVALID_SV;
     }
+
     int bid_value = atoi(value);
 
     char request[64];
@@ -650,13 +655,13 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
         return ERR_RECEIVING_TCP;
     }
 
-    // if command is not RCL, message is invalid
+    // if command is not RBD, message is invalid
     if (strcmp(command, "RBD ") != 0) {
         close(conn_fd);
         return ERR_UNKNOWN_ANSWER;
     }
 
-    // get RCL command status
+    // get RBD command status
     char status[4] = {0};
     if (read_tcp_stream(status, 3, conn_fd) != 0) {
         close(conn_fd);
@@ -665,8 +670,8 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
         }
         return ERR_RECEIVING_TCP;
     }
-    close(conn_fd);
 
+    close(conn_fd);
     return determine_bid_response_error(status, response);
 }
 

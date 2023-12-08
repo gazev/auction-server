@@ -743,7 +743,7 @@ int handle_bid(struct tcp_client *client) {
     starting_value = strtok(NULL, " ");
 
     // check if user is the owner of desired auction
-    if (strcmp(owner_uid, uid) != 0) {
+    if (strcmp(owner_uid, uid) == 0) {
         LOG_VERBOSE("%s:%d - [BID] Invalid owner for auction %s", client->ipv4, client->port, aid);
         char *resp = "RBD ILG\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {

@@ -700,7 +700,7 @@ int handle_show_record (char *input, struct client_state *client, char response[
         if (!is_valid_start_value(bid_sec))
             return ERR_UNKNOWN_ANSWER;
 
-        sprintf(bid_buff, "|%s - %s - %s %s - %s| ", host_uid, bid_value, bid_date, bid_time, bid_sec);
+        sprintf(bid_buff, "|%s - %s - %s %s - %s| ", bidder_uid, bid_value, bid_date, bid_time, bid_sec);
         strcat(bids_str, bid_buff);
         per_line_count += 1;
 
