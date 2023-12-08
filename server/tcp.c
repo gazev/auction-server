@@ -450,7 +450,7 @@ int handle_close(struct tcp_client *client) {
 
     // inform user of success
     char *resp = "RCL OK\n";
-    if (send_tcp_message(resp, 11, client->conn_fd) != 0) {
+    if (send_tcp_message(resp, 7, client->conn_fd) != 0) {
         LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL OK", client->ipv4, client->port);
         if (errno == EPIPE)
             LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
@@ -619,9 +619,7 @@ int handle_bid(struct tcp_client *client) {
     int read = 0; // number of bytes read
 
     while (read < MAX_BID_VALUE) {
-
         ssize_t r = recv(client->conn_fd, &byte, 1, 0);
-
         if (r < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 LOG_VERBOSE("%s:%d - [BID] Timed out client", client->ipv4, client->port);
@@ -631,6 +629,7 @@ int handle_bid(struct tcp_client *client) {
             }
             return 0;
         }
+
         if (r == 0) {
             LOG_VERBOSE("%s:%d - [BID] Connection closed by client", client->ipv4, client->port);
             return 0;
@@ -642,6 +641,7 @@ int handle_bid(struct tcp_client *client) {
         //if the first digit is a 0 ignore
         if (read == 0 && byte=='0')
             continue;
+
         //if someone sent a letter in the middle
         if (byte < '0' || byte > '9') {
             LOG_VERBOSE("%s:%d - [BID] Invalid value", client->ipv4, client->port);
@@ -791,7 +791,7 @@ int handle_bid(struct tcp_client *client) {
         return BID_BAD_ARGS;
     }
 
-    LOG_VERBOSE("%s:%d - [BID] Sucessfull bid %s", client->ipv4, client->port, aid);
+    LOG_VERBOSE("%s:%d - [BID] Successful bid %s", client->ipv4, client->port, aid);
     char *resp = "RBD ACC\n";
     if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
         LOG_DEBUG("%s:%d - [BID] Failed send_tcp_response", client->ipv4, client->port);

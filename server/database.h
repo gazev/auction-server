@@ -17,6 +17,7 @@ int is_auction_finished(char *aid);
 int get_auction_info(char *aid, char *buff, int n);
 int get_user_auctions(char *uid, char *buff);
 int get_auctions_list(char *buff);
+int get_auction_bidders_list(char *aid, char *buff);
 
 int get_last_bid(char *aid);
 

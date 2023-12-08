@@ -445,6 +445,155 @@ int get_auctions_list(char *buff) {
 
     unlock_db_mutex("list");
 
+
+    return written;
+}
+
+int get_auction_bidders_list(char *aid, char *buff) {
+    lock_db_mutex("bidders list");
+
+    /** 
+    * Scan auction bid's directory
+    */
+    struct dirent **entries;
+    char bids_path[128];
+    sprintf(bids_path, "AUCTIONS/%.3s/BIDS", aid);
+    int n_entries = scandir(bids_path, &entries, NULL, alphasort);
+    if (n_entries < 0) { // couldn't scan directory
+        LOG_DEBUG("Failed retrieving auction %s bids", aid);
+        LOG_DEBUG("scandir: %s", strerror(errno));
+        unlock_db_mutex("bidders list");
+        return -1;
+    }
+
+    // get rid of '.' and '..'
+    free(entries[0]);
+    free(entries[1]);
+
+    // we start after '.' and '..', we assume alphabetically they are always first, if no one
+    // tampers with database manually this is true
+    int first_entry = 2;
+    // if more than 50 auctions exist we retrieve the most 50 recent ones, 50 biggest bid values
+    if (n_entries > 52)
+        first_entry = n_entries - 50;
+
+    int written = 0; // bytes written to buff
+    char curr_bid_path[128]; // bid path 
+    char bid_info[128]; // information about currently iterated bid
+    for (int i = first_entry; i < n_entries; ++i) {
+        FILE *fp;
+        sprintf(curr_bid_path, "AUCTIONS/%.3s/BIDS/%.10s", aid, entries[i]->d_name);
+        if ((fp = fopen(curr_bid_path, "r")) == NULL) {
+            LOG_DEBUG("Failed opening bid file");
+            free(entries[i]);
+            continue;
+        }
+        
+        // retrieve information about bid
+        if (fgets(bid_info, 128, fp) < 0) {
+            LOG_DEBUG("Failed getting bid information");
+            free(entries[i]);
+            continue;
+        };
+
+        fclose(fp);
+
+        // first field, bidder UID
+        char *bidder_uid = strtok(bid_info, " ");
+        if (bidder_uid == NULL) {
+            LOG_DEBUG("Got null bidder uid");
+            free(entries[i]);
+            continue;
+        }
+
+        if (!is_valid_uid(bidder_uid)) {
+            LOG_DEBUG("Got invalid bidder UID")
+            free(entries[i]);
+            continue;
+        }
+
+        // second field, bid date in format YYYY-MM-DD
+        char *bid_date = strtok(NULL, " ");
+        if (bid_date == NULL) {
+            LOG_DEBUG("Got no bid date");
+            free(entries[i]);
+            continue;
+        }
+
+        // third field, bid time in format HH:MM:SS
+        char *bid_time = strtok(NULL, " ");
+        if (bid_time == NULL) {
+            LOG_DEBUG("Got no bid time");
+            free(entries[i]);
+            continue;
+        }
+
+        if (!is_valid_date_time(bid_date, bid_time)) {
+            LOG_DEBUG("Invalid date time");
+            free(entries[i]);
+            continue;
+        }
+
+        // last field, seconds passed from auction start until bid was made
+        char *bid_sec_time = strtok(NULL, "\n");
+        if (bid_sec_time == NULL) {
+            LOG_DEBUG("Got not bid sec time");
+            free(entries[i]);
+            continue;
+        }
+
+        // retrieve bid value from file name, file name in format VVVVVV.txt
+        int bid_value;
+        if ((sscanf(entries[i]->d_name, "%d.txt", &bid_value)) != 1) {
+            LOG_DEBUG("Invalid bid value");
+            free(entries[i]);
+            continue;
+        }
+
+        char bid_entry[128] = {0};
+        // write entry to response { B host_UID bid_value bid_date-time bid_sec_time}
+        sprintf(bid_entry, " B %s %d %s %s %s", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
+        strcat(buff, bid_entry);
+        written += strlen(bid_entry);
+
+        free(entries[i]);
+    }
+
+    // remove non interated bids
+    for (int i = 2; i < first_entry; ++i)
+        free(entries[i]);
+
+    free(entries);
+    
+    /**
+    * Check if auction has ended
+    */
+    FILE *fp;
+    char end_path[68];
+    char end_info[128] = {0};
+    sprintf(end_path, "AUCTIONS/%.3s/END_%.3s.txt", aid, aid);
+    if ((fp = fopen(end_path, "r")) != NULL) {
+        char end_buff[128];
+        if (fgets(end_buff, 128, fp) != NULL) {
+            char *date = strtok(end_buff, " ");
+            char *time = strtok(NULL, " ");
+            char *end_sec_time = strtok(NULL, "\n");
+
+            if (date == NULL || time == NULL || end_sec_time == NULL) {
+                // do nothing, TODO clean this mess later
+            } else {
+                sprintf(end_info, " E %s %s %s", date, time, end_sec_time);
+                written += strlen(end_info);
+            }
+        }
+    }
+    
+    
+    strcat(buff, end_info);
+    strcat(buff, "\n");
+    written += 1;
+
+    unlock_db_mutex("bidders list");
     return written;
 }
 
@@ -509,7 +658,7 @@ int register_user(char *uid, char *passwd) {
     }
     
     // create user's HOSTED dir
-    sprintf(user_file_path, "USERS/%6s/HOSTED", uid);
+    sprintf(user_file_path, "USERS/%.6s/HOSTED", uid);
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_DEBUG("[DB] Couldn't create HOSTED directory for user %s", uid);
@@ -1135,7 +1284,7 @@ int bid(char *aid, char *uid, int value) {
 
     int fd;
     char bid_path[128];
-    sprintf(bid_path, "AUCTIONS/%3s/BIDS/%d.txt", aid, value);
+    sprintf(bid_path, "AUCTIONS/%3s/BIDS/%06d.txt", aid, value);
     if ((fd = open(bid_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
         LOG_DEBUG("[DB] Failed creating bid file %s %d", aid, value);
         LOG_DEBUG("close: %s", strerror(errno));

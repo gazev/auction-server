@@ -410,6 +410,75 @@ int handle_show_record(char *input, struct udp_client *client, char *response, s
         return 0;
     }
 
+    char auction_info[128];
+    if (get_auction_info(aid, auction_info, 128) != 0) {
+        LOG_VERBOSE("%s:%d - [SRC] Failed getting auction %s information", client->ipv4, client->port, aid);
+        sprintf(response, "RRC NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    char *host_uid = strtok(auction_info, " ");
+    if (host_uid == NULL)
+        return ERR_SRC_BAD_VALUES;
+
+    if (!is_valid_uid(host_uid))
+        return ERR_SRC_BAD_VALUES;
+
+    char *asset_name = strtok(NULL, " ");
+    if (asset_name == NULL)
+        return ERR_SRC_BAD_VALUES;
+
+    if (!is_valid_name(asset_name))
+        return ERR_SRC_BAD_VALUES;
+    
+    char *fname = strtok(NULL, " ");
+    if (fname == NULL)
+        return ERR_SRC_BAD_VALUES;
+
+    if (!is_valid_fname(fname))
+        return ERR_SRC_BAD_VALUES;
+
+    char *sv = strtok(NULL, " ");
+    if (sv == NULL)
+        return ERR_SRC_BAD_VALUES;
+
+    if (!is_valid_start_value(sv))
+        return ERR_SRC_BAD_VALUES;
+
+    char *ta = strtok(NULL, " ");
+    if (ta == NULL)
+        return ERR_SRC_BAD_VALUES;
+
+    if (!is_valid_time_active(ta))
+        return ERR_SRC_BAD_VALUES;
+
+    char *start_date = strtok(NULL, " ");
+    if (start_date == NULL) 
+        return ERR_SRC_BAD_VALUES;
+
+    char *start_time = strtok(NULL, " ");
+    if (start_time == NULL)
+        return ERR_SRC_BAD_VALUES;
+
+    if (!is_valid_date_time(start_date, start_time))
+        return ERR_SRC_BAD_VALUES;
+
+    char *start_sec_time = strtok(NULL, "\n");
+    if (start_sec_time == NULL)
+        return ERR_SRC_BAD_VALUES;
+
+    sprintf(response, "RRC OK %s %s %s %s %s %s %s", 
+                                        host_uid, asset_name, fname,
+                                        sv, start_date, start_time, ta);
+
+    *response_len = strlen(response);
+    int written = get_auction_bidders_list(aid, response);
+    *response_len += written;
+
+    strcat(response, "\n");
+    written += 1;
+
     return 0;
 }
 
