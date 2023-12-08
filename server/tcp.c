@@ -606,6 +606,7 @@ int handle_show_asset(struct tcp_client *client) {
 
 int handle_bid(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [BID] Entered handler", client->ipv4, client->port);
+    update_database();
 
     char buff[32] = {0};
     int err = read_tcp_stream(buff, UID_SIZE+1+PASSWORD_SIZE+1+AID_SIZE+1, client->conn_fd);

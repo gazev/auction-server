@@ -337,16 +337,63 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
 
     *response_len += written;
 
-    LOG_VERBOSE("%s:%d - [LMA] Sent user %s auction list to client", client->ipv4, client->port, uid);
+    LOG_VERBOSE("%s:%d - [LMB] Sent user %s auction list to client", client->ipv4, client->port, uid);
 
     return 0;
 }
 
 
-// TODO
+/**
+ * Lists all the bids done by a user
+*/
 int handle_my_bids(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_my_bids");
     update_database();
+
+    char *uid = strtok(input, "\n");
+    if (uid == NULL) {
+        LOG_VERBOSE("%s:%d - [LMB] No UID supplied", client->ipv4, client->port);
+        return ERR_MY_BIDS_BAD_UID;
+    }
+    if (!is_valid_uid(uid)) {
+        LOG_VERBOSE("%s:%d - [LMB] Invalid UID", client->ipv4, client->port);
+        return ERR_MY_BIDS_BAD_UID;
+    }
+    /**
+    * Validate user and in database 
+    */
+    // check if user exists
+    if (!exists_user(uid)) {
+        LOG_VERBOSE("%s:%d - [LMB] User %s doesn't exist", client->ipv4, client->port, uid);
+        return ERR_MY_BIDS_BAD_UID;
+    }
+ 
+    // check if user is logged in
+    if(!is_user_logged_in(uid)) {
+        LOG_VERBOSE("%s:%d - [LMB] User %s isn't logged in", client->ipv4, client->port, uid);
+        sprintf(response, "RMB NLG\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    sprintf(response, "RMB OK");
+    *response_len = 6;
+
+    int written = get_user_bids(uid, response);
+    if (written < 0) {
+        LOG_VERBOSE("%s:%d - [LMB] Failed retrieving user %s auctions", client->ipv4, client->port, uid);
+        sprintf(response, "RMB ERR\n");
+        *response_len = 8;
+        return 0;
+    }
+    if (written == 1) {
+        LOG_VERBOSE("%s:%d - [LMB] User %s didnt bid yet", client->ipv4, client->port, uid);
+        sprintf(response, "RMB NOK\n");
+        *response_len = 8;
+        return 0;
+    }
+
+    *response_len += written;
     return 0;
 }
 
