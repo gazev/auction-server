@@ -382,22 +382,16 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
 */
 int handle_my_auctions (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("Entered");
-    /**
-    * Validate command arguments 
-    */
-    char *uid = strtok(input, " ");
-    if (uid == NULL)
-        return ERR_NULL_ARGS;
-
-    if (!is_valid_uid(uid))
-        return ERR_INVALID_UID;
+    if (!client->logged_in){
+        return ERR_NOT_LOGGED_IN;
+    }
 
     /**
     * Create and send protocol message
     * Format: LMA UID 
     */
     char request[16];
-    sprintf(request, "LMA %.6s\n", uid);
+    sprintf(request, "LMA %.6s\n", client->uid);
     
     if (send_udp_request(request, strlen(request), client) != 0) {
         return ERR_REQUESTING_UDP;
@@ -477,7 +471,7 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
                      "Status: A - Active, C - Closed\n\n"
             
                      "Auctions for user ");
-    strcat(response, uid);
+    strncat(response, client->uid, UID_SIZE);
     strcat(response, "\n");
     while (auc_id != NULL) {
         if (!is_valid_aid(auc_id))

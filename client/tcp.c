@@ -59,6 +59,7 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
 
     // validate asset file name
     asset_fname = strtok(NULL, " ");
+    LOG_DEBUG("%s", asset_fname);
     if (asset_fname == NULL)
         return ERR_NULL_ARGS;
 
@@ -85,17 +86,23 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
     * Get asset file information
     */
     struct stat st; 
-    if (stat(asset_fname, &st) != 0)
+    if (stat(asset_fname, &st) != 0) {
+        LOG_DEBUG("stat");
         return ERR_INVALID_ASSET_FILE;
+    }
 
     // file is too large
-    if (st.st_size > MAX_FSIZE)
+    if (st.st_size > MAX_FSIZE) {
+        LOG_DEBUG("too big");
         return ERR_INVALID_ASSET_FILE;
+    }
 
     int asset_fd;
     // if file doesn't exist
-    if ((asset_fd = open(asset_fname, O_RDONLY, 0)) < 0)
+    if ((asset_fd = open(asset_fname, O_RDONLY, 0)) < 0) {
+        LOG_DEBUG("does not exist");
         return ERR_INVALID_ASSET_FILE;
+    }
 
     /**
     * Open connect to server with a 5s timeout socket
