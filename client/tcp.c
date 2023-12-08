@@ -553,46 +553,6 @@ void rollback_asset_creation(char *fname) {
 
 
 /**
-* Analyses a response sent by the server to the BID command.
-* If it's a valid response returns 0 and writes corresponding result to `response`.
-* If the message is invalid returns an ERR_UNKNOWN_MESSAGE error code.
-*/
-int determine_bid_response_error(char *status, char *response) {
-    if (!strcmp(status, "ERR")) {
-        strcpy(response, "Received an error message for close command from the server\n");
-        return 0;
-    }
-
-    if (!strcmp(status, "NLG")) {
-        strcpy(response, "User is not logged in\n");
-        return 0;
-    }
-
-    if (!strcmp(status, "ILG")) {
-        strcpy(response, "User tried to bid on a auction started by himself\n");
-        return 0;
-    }
-
-    if (!strcmp(status, "REF")) {
-        strcpy(response, "Bid too low\n");
-        return 0;
-    }
-
-    if (!strcmp(status, "NOK")) {
-        strcpy(response, "Auction not active\n");
-        return 0;
-    }
-
-    if (!strcmp(status, "ACC")) {
-        strcpy(response, "Sucessfull bid\n");
-        return 0;
-    }
-
-    return ERR_UNKNOWN_ANSWER;
-}
-
-
-/**
  *  sends a message to the server asking to place a bid for auction
  * 
 */
@@ -663,8 +623,8 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
     }
 
     // get RBD command status
-    char status[4] = {0};
-    if (read_tcp_stream(status, 3, conn_fd) != 0) {
+    char status[5] = {0};
+    if (read_tcp_stream(status, 4, conn_fd) != 0) {
         close(conn_fd);
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return ERR_TIMEOUT_TCP;
@@ -672,10 +632,50 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
         return ERR_RECEIVING_TCP;
     }
 
+    if (strcmp(status, "ACC\n") != 0) {
+        // check for \n at the end of the message
+        close(conn_fd);
+        return determine_bid_response_error(status, response);
+    }
+
+    sprintf(response, "Sucessfully bidded %s on auction %s\n", value, aid);
     close(conn_fd);
-    return determine_bid_response_error(status, response);
+    return 0;
 }
 
+/**
+* Analyses a response sent by the server to the BID command.
+* If it's a valid response returns 0 and writes corresponding result to `response`.
+* If the message is invalid returns an ERR_UNKNOWN_MESSAGE error code.
+*/
+int determine_bid_response_error(char *status, char *response) {
+    if (!strcmp(status, "ERR\n")) {
+        strcpy(response, "Received an error message for bid command from the server (auction might not exist or client parameters might be badly formatted!)\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "NLG\n")) {
+        strcpy(response, "User is not logged in\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "ILG\n")) {
+        strcpy(response, "User cannot bid on an auction hosted by himself\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "REF\n")) {
+        strcpy(response, "The bid amound is too low\n");
+        return 0;
+    }
+
+    if (!strcmp(status, "NOK\n")) {
+        strcpy(response, "The auction is not active\n");
+        return 0;
+    }
+
+    return ERR_UNKNOWN_ANSWER;
+}
 
 /**
 * Creates a TCP socket with a 5 seconds timeout and connects it to the AS server.

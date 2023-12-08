@@ -615,7 +615,7 @@ int handle_bid(struct tcp_client *client) {
 
     /* read bid value (byte by byte)*/
     char byte = '0'; // byte currently reading
-    char value[MAX_BID_VALUE]; // overall value
+    char value[MAX_BID_VALUE + 1] = {0}; // overall value
     int read = 0; // number of bytes read
 
     while (read < MAX_BID_VALUE) {
@@ -652,7 +652,6 @@ int handle_bid(struct tcp_client *client) {
         read += 1;
     }
 
-    value[read] = '\0';
     int bid_value = atoi(value);
 
     /**

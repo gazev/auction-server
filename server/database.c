@@ -1174,7 +1174,11 @@ int bid(char *aid, char *uid, int value) {
         unlock_db_mutex("bid");
         return -1;
     }
-    close(ufd);
+
+    if (close(fd) != 0) {
+        LOG_DEBUG("[DB] Failed closing bid file %s, resources may be leaking", aid);
+        LOG_DEBUG("close: %s", strerror(errno));
+    }
 
     unlock_db_mutex("bid");
     return 0;
