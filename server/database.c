@@ -1,3 +1,5 @@
+#include <asm-generic/errno-base.h>
+#include <asm-generic/errno.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -14,6 +16,7 @@
 #include "../utils/config.h"
 #include "../utils/logging.h"
 #include "../utils/validators.h"
+#include "../utils/utils.h"
 
 #include "database.h"
 
@@ -744,7 +747,8 @@ void rollback_auction_dir_creation() {
 
     // remove files in ASSET folder
     char asset_dir[128];
-    char asset_file_path[128];
+    char asset_file_path[300];
+    sprintf(asset_dir, "AUCTIONS/%03d/ASSET", auc_count);
     if ((dp = opendir(asset_dir)) != NULL) {
         while ((cur = readdir(dp)) != NULL) {
             if (cur->d_name[0] == '.') continue;
@@ -878,47 +882,15 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
     /**
     * Read asset content from socket
     */
-    char buff[32768]; // 32 KiB
-    int total_read = 0;
-    while (1) {
-        ssize_t read = recv(conn_fd, buff, 32768, 0);
-        if (read <= 0) {
-            LOG_ERROR("recv: %s", strerror(errno));
-            if (close(afd) != 0) {
-                LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-                LOG_DEBUG("[DB] close: %s", strerror(errno));
-            }
-            rollback_auction_dir_creation();
-            unlock_db_mutex("create_auction");
-            return -1;
-        }
-
-        total_read += read;
-        if (total_read > fsize)
-            break;
-
-        // write to file
-        int written_to_file = 0;
-        char *ptr = buff;
-        do {
-            ssize_t written = write(afd, ptr + written_to_file, read - written_to_file);
-            if (written <= 0) {
-                LOG_DEBUG("recv: %s", strerror(errno));
-                if (close(afd) != 0) {
-                    LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
-                    LOG_DEBUG("[DB] close: %s", strerror(errno));
-                }
-                rollback_auction_dir_creation();
-                unlock_db_mutex("create_auction");
-                return -1;
-            }
-            written_to_file += written;
-            ptr += written;
-        } while (written_to_file < read);
+    if (as_recv_asset_file(afd, conn_fd, fsize) != 0) {
+        LOG_DEBUG("[DB] Failed receiving assetfile when creating new auction ")
+        close(afd);
+        rollback_auction_dir_creation();
+        unlock_db_mutex("create_auction");
+        return -1;
     }
 
     // Write last block without the \n 
-
     if (close(afd) != 0) {
         LOG_DEBUG("[DB] Failed closing file descriptor, resources may be leaking");
         LOG_DEBUG("[DB] close: %s", strerror(errno));

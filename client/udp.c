@@ -255,7 +255,6 @@ int handle_exit (char *input, struct client_state *client, char response[MAX_SER
     exit(0);
 }
 
-
 /**
 * Requests the AS for the list of existing auctions.
 * Returns 0 if successfully communicated with server and writes result to `response`.
@@ -338,11 +337,11 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
     */    
     int per_line_count = 0;
     memset(response, 0, MAX_SERVER_RESPONSE);
-    strcat(response, "--- Clearing terminal ---\033[2J\033[H\n"
+    strcat(response, 
                      "Format: |{AID - Status}| 5* (6 per line)\n"
                      "Status: A - Active, C - Closed\n\n"
 
-                     "AS Auctions:");
+                     "AS Auctions:\n");
     char *auc_id = strtok(data, " ");
     while (auc_id  != NULL) {
         strcat(response, "|");
@@ -473,7 +472,7 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
     int per_line_count = 0;
     char *auc_id = strtok(data, " ");
     memset(response, 0, MAX_SERVER_RESPONSE);
-    strcat(response, "--- Clearing terminal ---\033[2J\033[H"
+    strcat(response, 
                      "Format: |{AID - Status}| 5* (6 per line)\n"
                      "Status: A - Active, C - Closed\n\n"
             
@@ -651,15 +650,13 @@ int handle_show_record (char *input, struct client_state *client, char response[
 
     // auction information
     char *record_fmt_str = 
-        "--- Clearing terminal ---\033[2J\033[H"
         "Auction:        %s\n"
         "Auction name:   %s\n"
         "Hosted by:      %s\n"
         "Asset:          %s\n"
         "Start Value:    %s\n"
         "Date started:   %s %s\n"
-        "Time Active:    %s\n"
-        "Bids:\n";
+        "Time Active:    %s\n";
 
     sprintf(response, record_fmt_str, 
                             aid, name, host_uid, fname, 
@@ -669,9 +666,11 @@ int handle_show_record (char *input, struct client_state *client, char response[
     * Build bids information in the format:
     * { | host UID - bid value - bid time - bid sec time | 2* } (6 per line)
     */
-    char bid_buff[64];
     char *token = strtok(NULL, " ");
     int per_line_count = 0;
+
+    char bids_str[16384] = {0};
+    char bid_buff[64];
     while (token != NULL && strcmp(token, "B") == 0) {
         // parse a bidder information 
         char *bidder_uid = strtok(NULL, " ");
@@ -708,19 +707,55 @@ int handle_show_record (char *input, struct client_state *client, char response[
             return ERR_UNKNOWN_ANSWER;
 
         sprintf(bid_buff, "|%s - %s - %s %s - %s| ", host_uid, bid_value, bid_date, bid_time, bid_sec);
-        strcat(response, bid_buff);
+        strcat(bids_str, bid_buff);
         per_line_count += 1;
 
         if (per_line_count == 2) {
             per_line_count = 0;
-            strcat(response, "\n");
+            strcat(bids_str, "\n");
         }
 
         token = strtok(NULL, " ");
     }
 
     if (per_line_count != 2) 
-        strcat(response, "\n");
+        strcat(bids_str, "\n");
+
+    // check for E entry
+    char auction_status[128];
+    if (token != NULL) {
+        if (strcmp(token, "E") != 0)
+            return ERR_UNKNOWN_ANSWER;
+        
+        char *end_date = strtok(NULL, " ");
+        if (end_date == NULL)
+            return ERR_UNKNOWN_ANSWER;
+
+        char *end_time = strtok(NULL, " ");
+        if (end_time == NULL)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (!is_valid_date_time(end_date, end_time))
+            return ERR_UNKNOWN_ANSWER;
+
+        char *end_sec_time = strtok(NULL, "\n");
+        if (end_sec_time == NULL)
+            return ERR_UNKNOWN_ANSWER;
+
+        if (!is_valid_start_value(end_sec_time))
+            return ERR_UNKNOWN_ANSWER;
+
+        
+        sprintf(auction_status, "Status:         Closed\n"
+                                "End Date:       %s %s\n"
+                                "End Sec Time:   %s\n", end_date, end_time, end_sec_time);
+    } else {
+        sprintf(auction_status, "Status: Active\n");
+    }
+
+    strcat(response, auction_status);
+    strcat(response, "Bids:\n");
+    strcat(response, bids_str);
 
     return 0;
 }

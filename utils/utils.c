@@ -1,4 +1,3 @@
-#include <asm-generic/errno.h>
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -43,7 +42,7 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
         read = recv(conn_fd, buff, BUFF_SZ, 0);
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                LOG_VERBOSE("Timed out receiving response from client");
+                LOG_VERBOSE("Timed out receiving response");
                 LOG_DEBUG("recv: %s", strerror(errno));
             } else {
                 LOG_VERBOSE("Failed reading from connection socket");
@@ -58,7 +57,7 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
         }
 
         total_read += read;
-        if (total_read >= fsize)
+        if (total_read > fsize)
             break;
 
         int written_to_file = 0;
@@ -77,11 +76,13 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
 
     // if more than what was announced was sent it is an error
     if (total_read > fsize + 1) {
+        LOG_DEBUG("%d %d", total_read, fsize);
         return ERR_INVALID_PROTOCOL;
     }
 
     // check if LF finalizes the message, if it doesn't it is breaking the protocol
     if (buff[read - 1] != '\n') {
+        LOG_DEBUG("%c", buff[read - 1]);
         return ERR_INVALID_PROTOCOL; 
     }
 
@@ -118,7 +119,7 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
 int as_send_asset_file(int afd, int conn_fd, int fsize) {
     char buff[BUFF_SZ];
     int total_read = 0;
-    while (1) {
+    while (total_read < fsize) {
         ssize_t n = read(afd, buff, BUFF_SZ);
         if (n < 0) {
             LOG_DEBUG("Failed reading from asset file");
@@ -136,8 +137,8 @@ int as_send_asset_file(int afd, int conn_fd, int fsize) {
         int read_sent = 0;
         char *ptr = buff;
         do {
-            ssize_t written = send(conn_fd, ptr + read_sent, n - read_sent, 0);
-            if (written < 0) {
+            ssize_t sent = send(conn_fd, ptr + read_sent, n - read_sent, 0);
+            if (sent < 0) {
                 if (errno == EPIPE) {
                     LOG_DEBUG("Connection closed");
                 } else {
@@ -146,6 +147,7 @@ int as_send_asset_file(int afd, int conn_fd, int fsize) {
                 }
                 return ERR_TCP_WRITE;
             }
+            read_sent += sent;
         } while(read_sent < n);
     }
 
@@ -172,7 +174,7 @@ int read_tcp_stream(char *buff, int n, int conn_fd) {
         ssize_t read = recv(conn_fd, ptr + total_read, n - total_read, 0);
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                LOG_ERROR("Timed out receiving response from client");
+                LOG_ERROR("Timed out receiving response");
                 LOG_DEBUG("recv: %s", strerror(errno));
             } else {
                 LOG_ERROR("Failed reading from socket");

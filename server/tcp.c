@@ -1,3 +1,4 @@
+#include <asm-generic/errno.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -39,21 +40,26 @@ int serve_tcp_connection(struct tcp_client *client) {
     char cmd_buffer[8] = {0};
     int err = read_tcp_stream(cmd_buffer, 4, client->conn_fd);
     if (err) {
-        if (close(client->conn_fd) != 0) {
-            LOG_ERROR("Failed closing client connection, resources might be leaking");
-            LOG_DEBUG("close: %s", strerror(errno));
-        }
-
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            LOG_VERBOSE("%s:%d - Timed out client", client->ipv4, client->port);
-            return 0;
-        }
-
+        // if couldn't receive message from client
         if (err == ERR_TCP_READ)
             LOG_VERBOSE("%s:%d - Failed receiving message from client", client->ipv4, client->port);
         
         if (err == ERR_TCP_READ_CLOSED)
             LOG_VERBOSE("%s:%d - Client closed connection", client->ipv4, client->port);
+ 
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            LOG_VERBOSE("%s:%d - Timed out client", client->ipv4, client->port);
+
+       if (send_tcp_message("ERR\n", 4, client->conn_fd) != 0) {
+            LOG_VERBOSE("%s:%d - Failed responding to client", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - Client closed connection", client->ipv4, client->port);
+        }
+
+        if (close(client->conn_fd) != 0) {
+            LOG_ERROR("Failed closing client connection, resources might be leaking");
+            LOG_DEBUG("close: %s", strerror(errno));
+        }
 
         return 0;
     }
@@ -64,12 +70,9 @@ int serve_tcp_connection(struct tcp_client *client) {
     if (handle_tcp_command(cmd_buffer, client) != 0) {
         int err = send_tcp_message("ERR\n", 4, client->conn_fd);
         if (err) {
+            LOG_VERBOSE("%s:%d - Failed responding to client", client->ipv4, client->port);
             if (errno == EPIPE)
                 LOG_VERBOSE("%s:%d - Client closed connection", client->ipv4, client->port);
-
-            // this will be printed even if EPIPE message is always printed, it's intended
-            if (err == ERR_TCP_WRITE)
-                LOG_VERBOSE("%s:%d - Failed responding to client", client->ipv4, client->port);
         }
     }
 
@@ -107,20 +110,15 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
     */
     LOG_VERBOSE("%s:%d - [TCP] Handling %s command", client->ipv4, client->port, cmd);
     int handler_ret = handler_fn(client);
-
     if (handler_ret != 0) {
         LOG_VERBOSE("%s:%d - [TPC] Badly formatted command", client->ipv4, client->port);
         char *err_msg = get_tcp_error_msg(handler_ret);
 
         // send error message to client
-        int err = send_tcp_message(err_msg, strlen(err_msg), client->conn_fd);
-        if (err) {
+        if (send_tcp_message(err_msg, strlen(err_msg), client->conn_fd) != 0) {
+            LOG_VERBOSE("%s:%d - Failed responding to client", client->ipv4, client->port);
             if (errno == EPIPE)
                 LOG_VERBOSE("%s:%d - Client closed connection", client->ipv4, client->port);
-
-            // this will be printed even if EPIPE message is always printed, it's intended
-            if (err == ERR_TCP_WRITE)
-                LOG_VERBOSE("%s:%d - Failed responding to client", client->ipv4, client->port);
         }
     }
 
@@ -141,7 +139,16 @@ int handle_open(struct tcp_client *client) {
     int err = read_tcp_stream(buff, UID_SIZE + 1 + PASSWORD_SIZE + 1, client->conn_fd);
     if (err) { // time out or socket error
         LOG_VERBOSE("%s:%d - [OPA] Failed reading UID and password from TCP stream", client->ipv4, client->port);
-        return 0;
+        if (err == ERR_TCP_READ_CLOSED)
+            LOG_VERBOSE("%s:%d - [OPA] Client closed connection", client->ipv4, client->port);
+
+        if (err == ERR_TCP_READ)
+            LOG_VERBOSE("%s:%d - [OPA] Failed reading from socket", client->ipv4, client->port);
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            LOG_VERBOSE("%s:%d - [OPA] Timed out client", client->ipv4, client->port);
+
+        return OPA_BAD_ARGS;
     }
 
     // no delimiters after OPA and password
@@ -187,9 +194,9 @@ int handle_open(struct tcp_client *client) {
                 LOG_VERBOSE("%s:%d - [OPA] Timed out client", client->ipv4, client->port);
             } else {
                 LOG_VERBOSE("%s:%d - [OPA] Failed reading from socket", client->ipv4, client->port);
-                LOG_ERROR("%s:%d - recv: %s", client->ipv4, client->port, strerror(errno));
+                LOG_DEBUG("%s:%d - recv: %s", client->ipv4, client->port, strerror(errno));
             }
-            return 0;
+            return OPA_BAD_ARGS;
         }
 
         if (read == 0) {
@@ -247,7 +254,9 @@ int handle_open(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [OPA] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
         char *resp = "ROA NLG\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [OPA] Failed responding ROA NLG", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [OPA] Failed responding ROA NLG", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -256,7 +265,9 @@ int handle_open(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [OPA] Authentication failed for user %s", client->ipv4, client->port, uid);
         char *resp = "ROA NLG\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [OPA] Failed sending ROA NLG response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [OPA] Failed responding ROA NLG", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [OPA] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -265,9 +276,15 @@ int handle_open(struct tcp_client *client) {
     int auction_id = create_new_auction(uid, name, fname, sv, ta, fsize, client->conn_fd);
     if (auction_id == -1) {
         LOG_VERBOSE("%s:%d - [OPA] Failed creating new auction", client->ipv4, client->port);
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            LOG_VERBOSE("%s:%d - [OPA] Timed out client", client->ipv4, client->port);
+
         char *resp = "ROA NOK\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [OPA] Failed sending ROA NOK response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [OPA] Failed responding ROA NOK", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [OPA] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -278,7 +295,9 @@ int handle_open(struct tcp_client *client) {
     char resp[12];
     sprintf(resp, "ROA OK %03d\n", auction_id);
     if (send_tcp_message(resp, 11, client->conn_fd) != 0) {
-        LOG_DEBUG("%s:%d - [OPA] Failed sending ROA OK response", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [OPA] Failed responding ROA OK", client->ipv4, client->port);
+        if (errno == EPIPE)
+            LOG_VERBOSE("%s:%d - [OPA] Client closed connection", client->ipv4, client->port);
     }
 
     LOG_VERBOSE("%s:%d - [OPA] Auction %03d created for user %s", client->ipv4, client->port, auction_id, uid);
@@ -292,8 +311,17 @@ int handle_close(struct tcp_client *client) {
     char buff[128];
     int err = read_tcp_stream(buff, UID_SIZE + 1 + PASSWORD_SIZE + 1 + AID_SIZE + 1, client->conn_fd);
     if (err) {
-        LOG_VERBOSE("%s:%d - [CLS] Failed reading from TCP stream", client->ipv4, client->port);
-        return 0;
+        LOG_VERBOSE("%s:%d - [CLS] Failed reading UID and password from TCP stream", client->ipv4, client->port);
+        if (err == ERR_TCP_READ_CLOSED)
+            LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
+
+        if (err == ERR_TCP_READ)
+            LOG_VERBOSE("%s:%d - [CLS] Failed reading from socket", client->ipv4, client->port);
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            LOG_VERBOSE("%s:%d - [CLS] Timed out client", client->ipv4, client->port);
+
+        return CLS_BAD_ARGS;
     }
 
     /**
@@ -349,7 +377,9 @@ int handle_close(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [CLS] User %s doesn't exist or is not logged in", client->ipv4, client->port, uid);
         char *resp = "RCL NLG\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL NLG", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -359,7 +389,9 @@ int handle_close(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [CLS] Auction %s doesn't exist", client->ipv4, client->port, aid);
         char *resp = "RCL EAU\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL EAU", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -370,7 +402,9 @@ int handle_close(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [CLS] Failed retrieving information about action %s", client->ipv4, client->port, aid);
         char *resp = "RCL NOK\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL NOK", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -381,7 +415,9 @@ int handle_close(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [CLS] Invalid owner for auction %s", client->ipv4, client->port, aid);
         char *resp = "RCL EOW\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL EOW", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -391,7 +427,9 @@ int handle_close(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [CLS] Auction %s has already finished", client->ipv4, client->port, aid);
         char *resp = "RCL END\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL END", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -403,7 +441,9 @@ int handle_close(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [CLS] Auction %s couldn't be closed", client->ipv4, client->port, aid);
         char *resp = "RCL NOK\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL END", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -411,10 +451,12 @@ int handle_close(struct tcp_client *client) {
     // inform user of success
     char *resp = "RCL OK\n";
     if (send_tcp_message(resp, 11, client->conn_fd) != 0) {
-        LOG_DEBUG("%s:%d - [CLS] Failed send_tcp_response", client->ipv4, client->port);
+        LOG_VERBOSE("%s:%d - [CLS] Failed responding RCL OK", client->ipv4, client->port);
+        if (errno == EPIPE)
+            LOG_VERBOSE("%s:%d - [CLS] Client closed connection", client->ipv4, client->port);
     }
 
-    LOG_VERBOSE("%s:%d - Closed auction %s for user %s", client->ipv4, client->port, aid, uid);
+    LOG_VERBOSE("%s:%d - [CLS] Closed auction %s for user %s", client->ipv4, client->port, aid, uid);
 
     return 0;
 }
@@ -429,8 +471,17 @@ int handle_show_asset(struct tcp_client *client) {
     char buff[8]; // enough to fit AID + null terminating byte 
     int err = read_tcp_stream(buff, AID_SIZE + 1, client->conn_fd);
     if (err) {
-        LOG_VERBOSE("%s:%d - [SAS] Failed reading AID from TCP stream", client->ipv4, client->port);
-        return 0;
+        LOG_VERBOSE("%s:%d - [SAS] Failed reading UID and password from TCP stream", client->ipv4, client->port);
+        if (err == ERR_TCP_READ_CLOSED)
+            LOG_VERBOSE("%s:%d - Client closed connection", client->ipv4, client->port);
+
+        if (err == ERR_TCP_READ)
+            LOG_VERBOSE("%s:%d - Failed reading from socket", client->ipv4, client->port);
+
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            LOG_VERBOSE("%s:%d - Timed out client", client->ipv4, client->port);
+
+        return SAS_BAD_ARGS;
     }
 
     if (buff[AID_SIZE] != '\n') {
@@ -456,7 +507,9 @@ int handle_show_asset(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [SAS] Auction doesn't exist", client->ipv4, client->port);
         char *resp = "RSA NOK\n";
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [SAS] Failed sending RSA NOK response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [SAS] Failed responding RSA NOK", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [SAS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -469,7 +522,9 @@ int handle_show_asset(struct tcp_client *client) {
         LOG_VERBOSE("%s:%d - [SAS] Failed retrieving %3s auction information", client->ipv4, client->port, aid);
         char *resp = "RSA NOK\n"; 
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [SAS] Failed sending RSA NOK response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [SAS] Failed responding RSA NOK", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [SAS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -484,18 +539,23 @@ int handle_show_asset(struct tcp_client *client) {
         LOG_DEBUG("%s:%d - [SAS] Failed retrieving %3s auction information", client->ipv4, client->port, aid);
         char *resp = "RSA NOK\n"; 
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [SAS] Failed sending RSA NOK response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [SAS] Failed responding RSA NOK", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [SAS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
 
     struct stat st; 
     char asset_path[128];
+    sprintf(asset_path, "AUCTIONS/%s/ASSET/%s", aid, asset_fname);
     if (stat(asset_path, &st) != 0) {
         LOG_DEBUG("%s:%d - [SAS] Failed retrieving %3s auction information", client->ipv4, client->port, aid);
         char *resp = "RSA NOK\n"; 
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [SAS] Failed sending RSA NOK response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [SAS] Failed responding RSA NOK", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [SAS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -504,12 +564,13 @@ int handle_show_asset(struct tcp_client *client) {
     * Send response
     */
     int afd;
-    sprintf(asset_path, "AUCTIONS/%3s/%s", aid, asset_fname);
     if ((afd = open(asset_path, O_RDONLY, 0)) < 0) {
         LOG_DEBUG("%s:%d - [SAS] Failed retrieving %3s auction information", client->ipv4, client->port, aid);
         char *resp = "RSA NOK\n"; 
         if (send_tcp_message(resp, 8, client->conn_fd) != 0) {
-            LOG_DEBUG("%s:%d - [SAS] Failed sending RSA NOK response", client->ipv4, client->port);
+            LOG_VERBOSE("%s:%d - [SAS] Failed responding RSA NOK", client->ipv4, client->port);
+            if (errno == EPIPE)
+                LOG_VERBOSE("%s:%d - [SAS] Client closed connection", client->ipv4, client->port);
         }
         return 0;
     }
@@ -519,33 +580,24 @@ int handle_show_asset(struct tcp_client *client) {
     long fsize = st.st_size;
     sprintf(resp_info, "RSA OK %s %ld ", asset_fname, st.st_size);
     if (send_tcp_message(resp_info, strlen(resp_info), client->conn_fd) != 0) {
+        LOG_VERBOSE("%s:%d - [SAS] Failed sending asset information", client->ipv4, client->port);
+        if (errno == EPIPE)
+            LOG_VERBOSE("%s:%d - [SAS] Client closed connection", client->ipv4, client->port);
+ 
         close(afd);
-        LOG_DEBUG("%s:%d - [SAS] Failed sending RSA OK response", client->ipv4, client->port);
         return 0;
     }
 
-    // send the asset
-    int total_sent = 0;    
-    int sent;
-    off_t offset = 0;
-    while (total_sent < fsize) {
-        if ((sent = sendfile(client->conn_fd, afd, &offset, fsize - total_sent)) < 0) {
-            close(afd);
-            LOG_DEBUG("%s:%d - [SAS] Failed RSA sending asset file", client->ipv4, client->port);
-            return 0;
-        }
-        total_sent += sent;
+    if (as_send_asset_file(afd, client->conn_fd, fsize) < 0) {
+        LOG_VERBOSE("%s:%d - [SAS] Failed sending asset file to client", client->ipv4, client->port);
+        if (errno == EPIPE)
+            LOG_VERBOSE("%s:%d - [SAS] Connection closed by client", client->ipv4, client->port);
+
+        close(afd);
+        return 0;
     }
 
-    // terminate with \n because ?
-    if (send_tcp_message("\n", 1, client->conn_fd) != 0) {
-        LOG_DEBUG("%s:%d - [SAS] Failed sending message terminating LF token", client->ipv4, client->port);
-    }
-
-    if (close(afd) != 0) {
-        LOG_DEBUG("%s:%d - [SAS] Failed closing asset file descriptor, resources might be leaking", client->ipv4, client->port);
-        LOG_ERROR("close: %s", strerror(errno));
-    };
+    close(afd);
 
     LOG_VERBOSE("%s:%d - [SAS] Served asset %s", client->ipv4, client->port, aid);
 
