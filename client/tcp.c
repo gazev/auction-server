@@ -592,22 +592,22 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
     LOG_DEBUG("Entered BID");
 
     if (!client->logged_in) {
-        return -1;
+        return ERR_NOT_LOGGED_IN;
     }
 
     char *aid = strtok(input, " ");
     if (aid == NULL) {
-        return -1;
+        return ERR_NULL_ARGS;
     }
     if (!is_valid_aid(aid)) {
-        return -1;
+        return ERR_INVALID_AID;
     }
     char *value = strtok(NULL, "\n");
     if (value == NULL) {
-        return -1;
+        return ERR_NULL_ARGS;
     }
     if (!is_valid_start_value(value)){
-        return -1;
+        return ERR_INVALID_SV;
     }
     int bid_value = atoi(value);
 
