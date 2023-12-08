@@ -10,13 +10,13 @@ Client:
 [X] - exit
 [X] - list 
 [X] - myauctions 
-[ ] - mybids
+[X] - mybids
 [X] - showrecord
 
-[+] - open
+[X] - open
 [X] - close
-[+] - showasset
-[ ] - bid
+[X] - showasset
+[X] - bid
 
 Server:
 [X] - login
@@ -25,12 +25,15 @@ Server:
 [X] - exit
 [X] - list 
 [X] - myauctions 
-[ ] - mybids
-[ ] - showrecord
+[X] - mybids
+[X] - showrecord
 
-[+] - open
+[X] - open
 [X] - close
-[+] - showasset
-[ ] - bid
+[X] - showasset
+[X] - bid
+
+## TODO
+Document the code, revise it and test it against official tests
 
 
