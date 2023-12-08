@@ -492,6 +492,7 @@ int get_auction_bidders_list(char *aid, char *buff) {
         // retrieve information about bid
         if (fgets(bid_info, 128, fp) < 0) {
             LOG_DEBUG("Failed getting bid information");
+            fclose(fp);
             free(entries[i]);
             continue;
         };
@@ -588,6 +589,7 @@ int get_auction_bidders_list(char *aid, char *buff) {
         }
     }
     
+    fclose(fp);
     
     strcat(buff, end_info);
     strcat(buff, "\n");

@@ -781,7 +781,7 @@ int handle_my_bids (char *input, struct client_state *client, char response[MAX_
     * Expected format: RLB status [AID state]* 
     **/
     char buffer[8192] = {0}; 
-    int err = receive_udp_response(buffer, 8192, client);
+    int err = receive_udp_response(buffer, 8191, client);
     if (err != 0) {
         if (err == UDP_ERR_NO_LF_MESSAGE)
             return ERR_UNKNOWN_ANSWER;
