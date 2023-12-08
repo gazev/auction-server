@@ -168,7 +168,7 @@ void *tcp_server_thread_fn(void *thread_v) {
         exit(1);
     }
 
-    LOG("[TPC] Listening for TCP connections on port %s", port);
+    LOG("[TCP] Listening for TCP connections on port %s", port);
 
     /**
     * Main loop for TCP server (delegating to worker threads)
