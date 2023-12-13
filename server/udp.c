@@ -276,9 +276,7 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
     /**
     * validate command arguments 
     */
-    char *uid;
-
-    uid = strtok(input, "\n");
+    char *uid = strtok(input, "\n");
     if (uid == NULL) {
         LOG_VERBOSE("%s:%d - [LMA] No UID supplied", client->ipv4, client->port);
         return ERR_LMA_BAD_VALUES;
@@ -288,11 +286,6 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
         LOG_VERBOSE("%s:%d - [LMA] Invalid UID", client->ipv4, client->port);
         return ERR_LMA_BAD_VALUES;
     }
-
-    /**
-    * Update database and validate 
-    */
-    update_database();
 
     // check if user exists
     if (!exists_user(uid)) {
@@ -310,6 +303,9 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
         *response_len = 8;
         return 0;
     }
+
+    // update database
+    update_database();
 
     /**
     * Start creating my auctions response
@@ -348,7 +344,6 @@ int handle_my_auctions(char *input, struct udp_client *client, char *response, s
 */
 int handle_my_bids(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("entered handle_my_bids");
-    update_database();
 
     char *uid = strtok(input, "\n");
     if (uid == NULL) {
@@ -376,6 +371,12 @@ int handle_my_bids(char *input, struct udp_client *client, char *response, size_
         return 0;
     }
 
+    // update database
+    update_database();
+
+    /**
+    * Start creating my bids response
+    */
     sprintf(response, "RMB OK");
     *response_len = 6;
 
@@ -400,9 +401,8 @@ int handle_my_bids(char *input, struct udp_client *client, char *response, size_
 
 int handle_list(char *input, struct udp_client *client, char *response, size_t *response_len) {
     LOG_DEBUG("%s:%d - [LST] Entered handler", client->ipv4, client->port);
-    /** Update database*/
+    // update database
     update_database();
-
     /**
     * Build and send response
     */
@@ -457,6 +457,12 @@ int handle_show_record(char *input, struct udp_client *client, char *response, s
         return 0;
     }
 
+    // update database
+    update_database();
+
+    /**
+    * Create show record response
+    */
     char auction_info[128];
     if (get_auction_info(aid, auction_info, 128) != 0) {
         LOG_VERBOSE("%s:%d - [SRC] Failed getting auction %s information", client->ipv4, client->port, aid);
@@ -465,6 +471,7 @@ int handle_show_record(char *input, struct udp_client *client, char *response, s
         return 0;
     }
 
+    // validate database values (these shouldn't be wrong, but if they are db is corrupted)
     char *host_uid = strtok(auction_info, " ");
     if (host_uid == NULL)
         return ERR_SRC_BAD_VALUES;

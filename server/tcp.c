@@ -369,7 +369,9 @@ int handle_close(struct tcp_client *client) {
         return CLS_BAD_ARGS;
     }
 
-    /**
+    // Update database /
+    update_database();
+    /*
     * Validate user and auction in database 
     */
     // check user against db
@@ -606,7 +608,6 @@ int handle_show_asset(struct tcp_client *client) {
 
 int handle_bid(struct tcp_client *client) {
     LOG_DEBUG("%s:%d - [BID] Entered handler", client->ipv4, client->port);
-    update_database();
 
     char buff[32] = {0};
     int err = read_tcp_stream(buff, UID_SIZE+1+PASSWORD_SIZE+1+AID_SIZE+1, client->conn_fd);
@@ -618,7 +619,6 @@ int handle_bid(struct tcp_client *client) {
     char byte = '0'; // byte currently reading
     char value[MAX_BID_VALUE + 1] = {0}; // overall value
     int read = 0; // number of bytes read
-
     while (read < MAX_BID_VALUE) {
         ssize_t r = recv(client->conn_fd, &byte, 1, 0);
         if (r < 0) {
@@ -628,7 +628,7 @@ int handle_bid(struct tcp_client *client) {
                 LOG_VERBOSE("%s:%d - [BID] Failed reading from socket", client->ipv4, client->port);
                 LOG_ERROR("%s:%d - recv: %s", client->ipv4, client->port, strerror(errno));
             }
-            return 0;
+            return BID_BAD_ARGS;
         }
 
         if (r == 0) {
@@ -646,7 +646,7 @@ int handle_bid(struct tcp_client *client) {
         //if someone sent a letter in the middle
         if (byte < '0' || byte > '9') {
             LOG_VERBOSE("%s:%d - [BID] Invalid value", client->ipv4, client->port);
-            return 0;
+            return BID_BAD_ARGS;
         }
 
         value[read] = byte;
@@ -692,6 +692,8 @@ int handle_bid(struct tcp_client *client) {
         return BID_BAD_ARGS;
     }
 
+    // update database
+    update_database();
     /**
     * Validate user and auction in database 
     */

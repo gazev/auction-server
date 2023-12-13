@@ -97,6 +97,9 @@ int load_db_state() {
     return 0;
 }
 
+/**
+* Updates the databse by closing auctions that are expired.
+*/
 int update_database() {
     LOG_DEBUG("[DB] Updating database");
     lock_db_mutex("update");
@@ -122,6 +125,7 @@ int update_database() {
         char bid_path[32];
         sprintf(bid_path, "AUCTIONS/%.3s/END_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
         int end_fd;
+
         // bid has already ended, continue
         if ((end_fd = open(bid_path, O_RDONLY)) > 0) {
             if (close(end_fd) != 0) {
@@ -206,6 +210,7 @@ int update_database() {
             continue;
         }
 
+        long end_sec_time = start_time_l + time_active_i;
         if (close(close_fd) != 0) {
             LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
             LOG_DEBUG("[DB] close: %s", strerror(errno));
@@ -213,7 +218,7 @@ int update_database() {
 
         // get datetime to put in END file
         struct tm *tm_time;
-        if ((tm_time = gmtime(&curr_time)) == NULL) {
+        if ((tm_time = gmtime(&end_sec_time)) == NULL) {
             LOG_DEBUG("[DB] Couldn't get current time information")
             free(entries[i]);
             continue;
@@ -226,8 +231,7 @@ int update_database() {
                     tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);
 
         char end_info[256];
-        sprintf(end_info, "%s %ld\n", time_str, curr_time - start_time_l);
-
+        sprintf(end_info, "%s %d\n", time_str, time_active_i);
  
         // write information to END file
         if ((fp = fopen(bid_path, "w")) == NULL) {
@@ -247,6 +251,7 @@ int update_database() {
     unlock_db_mutex("list");
     return 0;
 }
+
 /**
 * Check if user is registred in DB 
 */
@@ -273,11 +278,10 @@ int exists_user(char *uid) {
 * Checks if user is logged in
 */
 int is_user_logged_in(char *uid) {
-    char user_login_path[64];
-    FILE *fp;
-
     lock_db_mutex(uid);
 
+    FILE *fp;
+    char user_login_path[64];
     sprintf(user_login_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if ((fp = fopen(user_login_path, "r")) == NULL) {
         unlock_db_mutex(uid);
@@ -287,7 +291,6 @@ int is_user_logged_in(char *uid) {
     fclose(fp);
 
     unlock_db_mutex(uid);
-
     return 1;
 }
 
@@ -295,23 +298,20 @@ int is_user_logged_in(char *uid) {
 * Check if an auction exists in the database (this is like this for now, must check later)
 */
 int exists_auction(char *aid) {
-    int aid_int = atoi(aid);
-
     lock_db_mutex(aid);
 
+    int aid_int = atoi(aid);
     int ret = (aid_int <= auc_count && aid_int > 0);
 
     unlock_db_mutex(aid);
-
     return ret; 
 }
 
 int is_auction_finished(char *aid) {
-    FILE *fp;
-    char auc_path[64];
-
     lock_db_mutex(aid);
 
+    FILE *fp;
+    char auc_path[64];
     sprintf(auc_path, "AUCTIONS/%3s/END_%3s.txt", aid, aid);
     if ((fp = fopen(auc_path, "r")) == NULL) {
         unlock_db_mutex(aid);
@@ -321,16 +321,14 @@ int is_auction_finished(char *aid) {
     fclose(fp);
 
     unlock_db_mutex(aid);
-
     return 1;
 }
 
 int get_auction_info(char *aid, char *buff, int n) {
-    FILE *fp;
-    char auction_path[64];
-
     lock_db_mutex(aid);
 
+    FILE *fp;
+    char auction_path[64];
     sprintf(auction_path, "AUCTIONS/%3s/START_%3s.txt", aid, aid);
     if ((fp = fopen(auction_path, "r")) == NULL) {
         LOG_DEBUG("[DB] Failed reading from auction %s information file, databsae might be corrupted", aid);
@@ -353,8 +351,8 @@ int get_auction_info(char *aid, char *buff, int n) {
 }
 
 int get_user_auctions(char *uid, char *buff) {
-    char user_hosted_path[256];
-    sprintf(user_hosted_path, "USERS/%s/HOSTED", uid);
+    char user_hosted_path[32];
+    sprintf(user_hosted_path, "USERS/%.6s/HOSTED", uid);
 
     lock_db_mutex(uid);
 
@@ -368,7 +366,7 @@ int get_user_auctions(char *uid, char *buff) {
     }
 
     int written = 0;
-    char hosted_auc_path[128];
+    char hosted_auc_path[32];
     int check_fd;
     for (int i = 0; i < n_entries; i++) {
         // ignore hidden files
@@ -414,12 +412,14 @@ int get_auctions_list(char *buff) {
         return -1;
     }
 
+    /** Iterate all auctions */
     int written = 0;
-    char curr_auc_path[128];
+    char curr_auc_path[32];
     int check_fd;
     for (int i = 0; i < n_entries; i++) {
         if (entries[i]->d_name[0] == '.') continue;
 
+        // path to current auction "AUCTIONS/001/END_001.txt"
         sprintf(curr_auc_path, "AUCTIONS/%.3s/END_%.3s.txt", entries[i]->d_name, entries[i]->d_name);
         char auc_status[8];
         if ((check_fd = open(curr_auc_path, 0, SERVER_MODE)) < 0) {
@@ -452,11 +452,8 @@ int get_auctions_list(char *buff) {
 int get_auction_bidders_list(char *aid, char *buff) {
     lock_db_mutex("bidders list");
 
-    /** 
-    * Scan auction bid's directory
-    */
     struct dirent **entries;
-    char bids_path[128];
+    char bids_path[32];
     sprintf(bids_path, "AUCTIONS/%.3s/BIDS", aid);
     int n_entries = scandir(bids_path, &entries, NULL, alphasort);
     if (n_entries < 0) { // couldn't scan directory
@@ -477,11 +474,12 @@ int get_auction_bidders_list(char *aid, char *buff) {
     if (n_entries > 52)
         first_entry = n_entries - 50;
 
-    int written = 0; // bytes written to buff
-    char curr_bid_path[128]; // bid path 
-    char bid_info[128]; // information about currently iterated bid
+    int written = 0;         // bytes written to buff
+    char curr_bid_path[32]; // bid path 
+    char bid_info[128];      // information about currently iterated bid
     for (int i = first_entry; i < n_entries; ++i) {
         FILE *fp;
+        // iterated bid "AUCTIONS/001/BIDS/000100.txt"
         sprintf(curr_bid_path, "AUCTIONS/%.3s/BIDS/%.10s", aid, entries[i]->d_name);
         if ((fp = fopen(curr_bid_path, "r")) == NULL) {
             LOG_DEBUG("Failed opening bid file");
@@ -552,15 +550,15 @@ int get_auction_bidders_list(char *aid, char *buff) {
         }
 
         char bid_entry[128] = {0};
-        // write entry to response { B host_UID bid_value bid_date-time bid_sec_time}
-        sprintf(bid_entry, " B %s %d %s %s %s", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
+        // write entry to response { B host_UID bid_value bid_date-time bid_sec_time }
+        sprintf(bid_entry, " B %.6s %d %s %s %s", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
         strcat(buff, bid_entry);
         written += strlen(bid_entry);
 
         free(entries[i]);
     }
 
-    // remove non interated bids
+    // free non interated bids
     for (int i = 2; i < first_entry; ++i)
         free(entries[i]);
 
@@ -570,26 +568,28 @@ int get_auction_bidders_list(char *aid, char *buff) {
     * Check if auction has ended
     */
     FILE *fp;
-    char end_path[68];
+    char end_path[32];
     char end_info[128] = {0};
     sprintf(end_path, "AUCTIONS/%.3s/END_%.3s.txt", aid, aid);
     if ((fp = fopen(end_path, "r")) != NULL) {
+        // retrieve bid END information
         char end_buff[128];
         if (fgets(end_buff, 128, fp) != NULL) {
             char *date = strtok(end_buff, " ");
             char *time = strtok(NULL, " ");
             char *end_sec_time = strtok(NULL, "\n");
 
-            if (date == NULL || time == NULL || end_sec_time == NULL) {
-                // do nothing, TODO clean this mess later
-            } else {
-                sprintf(end_info, " E %s %s %s", date, time, end_sec_time);
-                written += strlen(end_info);
+            // this was the last part of the code written for the entire thing, the fatigue is palpable
+            if (date != NULL && time != NULL && end_sec_time != NULL) {
+                if (is_valid_date_time(date, time)) {
+                    sprintf(end_info, " E %s %s %s", date, time, end_sec_time);
+                    written += strlen(end_info);
+
+                }
             }
         }
+        fclose(fp);
     }
-    
-    fclose(fp);
     
     strcat(buff, end_info);
     strcat(buff, "\n");
@@ -606,7 +606,7 @@ int log_in_user(char *uid) {
     lock_db_mutex(uid);
 
     int fd;
-    char user_login_path[64];
+    char user_login_path[32];
     sprintf(user_login_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if ((fd = open(user_login_path, O_CREAT, SERVER_MODE)) == -1) {
         LOG_DEBUG("[DB] Couldn't create login file for user %s", uid);
@@ -620,16 +620,14 @@ int log_in_user(char *uid) {
     };
 
     unlock_db_mutex(uid);
-
     return 0;
 }
 
 int log_out_user(char *uid) {
-    char user_login_path[64];
-
     lock_db_mutex(uid);
 
-    sprintf(user_login_path, "USERS/%6s/%6s_login.txt", uid, uid);
+    char user_login_path[32];
+    sprintf(user_login_path, "USERS/%.6s/%.6s_login.txt", uid, uid);
     if (remove(user_login_path) != 0) {
         LOG_DEBUG("[DB] Failed removing login file %s", uid);
         LOG_DEBUG("[DB] remove: %s", strerror(errno));
@@ -648,8 +646,8 @@ int register_user(char *uid, char *passwd) {
     lock_db_mutex(uid);
     
     // create user directory (e.g root/USERS/123456)
-    char user_file_path[64];
-    sprintf(user_file_path, "USERS/%6s", uid);
+    char user_file_path[32];
+    sprintf(user_file_path, "USERS/%.6s", uid);
     if (mkdir(user_file_path, SERVER_MODE) != 0) {
         if (errno != EEXIST) {
             LOG_DEBUG("[DB] Couldn't create user directory for user %s", uid);
@@ -729,7 +727,6 @@ int register_user(char *uid, char *passwd) {
     };
 
     unlock_db_mutex(uid);
-
     return 0;
 }
 
@@ -743,7 +740,7 @@ int unregister_user(char *uid) {
     lock_db_mutex(uid);
 
     // remove user's login
-    char user_file_path[64];
+    char user_file_path[32];
     sprintf(user_file_path, "USERS/%6s/%6s_login.txt", uid, uid);
     if (remove(user_file_path) != 0) {
         LOG_DEBUG("[DB] Failed removing login file for user %s", uid);
@@ -753,7 +750,7 @@ int unregister_user(char *uid) {
     }
 
     // remove user's passwd
-    sprintf(user_file_path, "USERS/%6s/%6s_pass.txt", uid, uid);
+    sprintf(user_file_path, "USERS/%.6s/%.6s_pass.txt", uid, uid);
     if (remove(user_file_path) != 0) {
         LOG_DEBUG("[DB] Failed removing password file for user %s", uid);
         LOG_DEBUG("[DB] remove: %s", uid);
@@ -762,7 +759,6 @@ int unregister_user(char *uid) {
     }
 
     unlock_db_mutex(uid);
-
     return 0;
 }
 
@@ -773,15 +769,15 @@ int is_authentic_user(char *uid, char *passwd) {
     lock_db_mutex(uid);
 
     FILE *fp;
-    char passwd_path_file[64];
-    char stored_password[9];
-    sprintf(passwd_path_file, "USERS/%6s/%6s_pass.txt", uid, uid);
+    char passwd_path_file[32];
+    char stored_password[16];
+    sprintf(passwd_path_file, "USERS/%.6s/%.6s_pass.txt", uid, uid);
     if ((fp = fopen(passwd_path_file, "r")) == NULL) {
         unlock_db_mutex(uid);
         return 0;
     }
 
-    if (fgets(stored_password, 9, fp) == NULL) {
+    if (fgets(stored_password, 16, fp) == NULL) {
         fclose(fp);
         unlock_db_mutex(uid);
         return -1;
@@ -789,19 +785,16 @@ int is_authentic_user(char *uid, char *passwd) {
 
     fclose(fp);
 
-    int ret = strcmp(stored_password, passwd) == 0 ? 1 : 0;
+    int r = strcmp(stored_password, passwd) == 0 ? 1 : 0;
 
     unlock_db_mutex(uid);
-
-    return ret;
+    return r;
 }
 
 /**
 * Creates a new auction and returns it's AID if successfull. On failure returns -1
 */
 int create_auction_dir() { 
-    char tmp_path[128];
-
     // if we reached the limit auctions
     if (auc_count >= 999) {
         return -1;
@@ -809,6 +802,7 @@ int create_auction_dir() {
 
     auc_count++;
 
+    char tmp_path[32];
     // create auction directory    
     sprintf(tmp_path, "AUCTIONS/%03d", auc_count);
     if (mkdir(tmp_path, SERVER_MODE) != 0) {
@@ -842,12 +836,16 @@ int create_auction_dir() {
     return auc_count;
 }
 
+/**
+* Rolls back an auction directory creation that went wrong. This prevents 
+* ghost auctions from being accumulated in the database
+*/
 void rollback_auction_dir_creation() {
     DIR *dp;
     struct dirent *cur;
-    char auction_file_path[256];
 
     // directory for auction doesn't exist (creation failed because max limit was exceeded)
+    char auction_file_path[32];
     sprintf(auction_file_path, "AUCTIONS/%03d", auc_count);
     if ((dp = opendir(auction_file_path)) == NULL) {
         if (errno == ENOENT) { // directory doesn't exist
@@ -859,7 +857,8 @@ void rollback_auction_dir_creation() {
         return;
     }
 
-    char file_path[280]; 
+    char file_path[512]; // it's this big because any file can actually be placed there (even if statement prohibits this fname size)
+                        // and we must avoid buffer overflows
     // remove all regular files inside directory
     while ((cur = readdir(dp)) != NULL) {
         if (cur->d_name[0] == '.') continue;
@@ -880,8 +879,8 @@ void rollback_auction_dir_creation() {
     };
 
     // remove bids if they exist
-    char bids_dir[128];
-    char bid_file_path[280];
+    char bids_dir[32];
+    char bid_file_path[512]; // this because becuase of same reason as `file_path`
     sprintf(bids_dir, "AUCTIONS/%03d/BIDS", auc_count);
     if ((dp = opendir(bids_dir)) != NULL) {
         while ((cur = readdir(dp)) != NULL) {
@@ -910,8 +909,8 @@ void rollback_auction_dir_creation() {
     }
 
     // remove files in ASSET folder
-    char asset_dir[128];
-    char asset_file_path[300];
+    char asset_dir[32];
+    char asset_file_path[512]; // this big because of the same reason as `file_path`
     sprintf(asset_dir, "AUCTIONS/%03d/ASSET", auc_count);
     if ((dp = opendir(asset_dir)) != NULL) {
         while ((cur = readdir(dp)) != NULL) {
@@ -950,12 +949,11 @@ void rollback_auction_dir_creation() {
 
 
 /**
-* This is a very big operation, it could be more granular.
+* Opens an auction in the database. 
+* This funciton handles the logic of creating an auction in the database and also
+* downloads the asset into the auction.
 */
 int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int fsize, int conn_fd) {
-    /** 
-    * Create auction info files
-    */
     lock_db_mutex("create_auction");
 
     int auc_id;
@@ -1034,9 +1032,10 @@ int create_new_auction(char *uid, char *name, char *fname, int sv, int ta, int f
     /**
     * Retrieve auction asset file
     */
-    sprintf(tmp_path, "AUCTIONS/%03d/ASSET/%s", auc_count, fname);
+    char asset_fname_path[64];
+    sprintf(asset_fname_path, "AUCTIONS/%03d/ASSET/%.*s", auc_count, FNAME_LEN, fname);
     int afd;
-    if ((afd = open(tmp_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
+    if ((afd = open(asset_fname_path, O_CREAT | O_WRONLY, SERVER_MODE)) < 0) {
         LOG_DEBUG("[DB] open: %s", strerror(errno));
         rollback_auction_dir_creation();
         unlock_db_mutex("create_auction");
@@ -1187,7 +1186,6 @@ int close_auction(char *aid) {
     fclose(fp);
 
     unlock_db_mutex(aid);
-
     return 0;
 }
 
@@ -1300,7 +1298,7 @@ int bid(char *aid, char *uid, int value) {
     }
 
     char bid_info[256];
-    sprintf(bid_info, "%s %s %ld\n", uid, bid_datetime, bid_sec_time);
+    sprintf(bid_info, "%.6s %s %ld\n", uid, bid_datetime, bid_sec_time);
 
     if ((fp = fopen(bid_path, "w")) == NULL) {
         LOG_DEBUG("[DB] Failed writting information to auction bid %s END file", aid);
@@ -1318,7 +1316,7 @@ int bid(char *aid, char *uid, int value) {
     fclose(fp);
 
     int ufd;
-    char user_bidded[128];
+    char user_bidded[32];
     sprintf(user_bidded, "USERS/%.6s/BIDDED/%.3s.txt", uid, aid);
     if ((ufd = open(user_bidded, O_CREAT, SERVER_MODE)) < 0) {
         LOG_DEBUG("[DB] Failed creating bid file for user %s on auction %s", uid, aid);
@@ -1337,12 +1335,10 @@ int bid(char *aid, char *uid, int value) {
 
 int get_user_bids(char *uid, char *response) {
     lock_db_mutex("get user bids");
-
-    char bids_dir[128] = {0};
-    sprintf(bids_dir, "USERS/%.6s/BIDDED", uid);
-
     struct dirent **entries;
 
+    char bids_dir[32];
+    sprintf(bids_dir, "USERS/%.6s/BIDDED", uid);
     int n_entries = scandir(bids_dir, &entries, NULL, alphasort);
     if (n_entries < 0) {
         LOG_DEBUG("[DB] Failed retrieving user auctions");
@@ -1352,7 +1348,7 @@ int get_user_bids(char *uid, char *response) {
     }
     
     int written = 0;
-    char curr_auc_path[128];
+    char curr_auc_path[32];
     int check_fd;
     for (int i = 0; i < n_entries; i++) {
         if (entries[i]->d_name[0] == '.') continue;

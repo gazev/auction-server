@@ -32,8 +32,8 @@ char *tcp_errors_table[] = {
     "", // return code 0 is not an error
     "ROA ERR\n", // OPA with bad args 
     "RCL ERR\n", // CLS with bad args 
+    "RSA ERR\n", // SAS with bad args 
     "RBD ERR\n", // BID with bad args 
-    "RSA ERR\n", // BID with bad args 
 };
 
 static

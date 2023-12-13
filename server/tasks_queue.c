@@ -103,7 +103,7 @@ int enqueue(tasks_queue *q, task_t *task) {
 /**
 * Retrieves an item from the queue. Returns 0 on success and -1 if an error occurs 
 */
-int dequeue(tasks_queue *q, task_t *arg) {
+int dequeue(tasks_queue *q, task_t *task) {
     if (pthread_mutex_lock(&q->mutex) != 0) {
         perror("pthread_mutex_lock");
         return -1;
@@ -116,7 +116,7 @@ int dequeue(tasks_queue *q, task_t *arg) {
         }
     }
 
-    memcpy(arg, &q->tasks[q->tail], sizeof (task_t));
+    memcpy(task, &q->tasks[q->tail], sizeof (task_t));
     q->tail = (q->tail + 1) % 100;
     q->size--;
 
