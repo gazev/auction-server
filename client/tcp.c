@@ -163,8 +163,10 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
     }
 
     // if command is not ROA, server message is invalid 
-    if (strcmp(command, "ROA "))
-        return close(conn_fd), ERR_UNKNOWN_ANSWER;
+    if (strcmp(command, "ROA ")) {
+        close(conn_fd);
+        return ERR_UNKNOWN_ANSWER;
+    }
 
     // get ROA response status
     char status[4] = {0};
@@ -327,9 +329,10 @@ int handle_close (char *input, struct client_state *client, char response[MAX_SE
     // if we don't receive OK status, check status and write result to response 
     if (strcmp(status, "OK\n") != 0) {
         // check for \n at the end of the message
-        if (!is_lf_in_stream(conn_fd))
-            return close(conn_fd), ERR_UNKNOWN_ANSWER;
-
+        if (!is_lf_in_stream(conn_fd)) {
+            close(conn_fd);
+            return ERR_UNKNOWN_ANSWER;
+        }
         close(conn_fd);
         return determine_close_response_error(status, response);
     }
@@ -423,8 +426,10 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
         return ERR_RECEIVING_TCP;
     }
 
-    if (strcmp(command, "RSA ") != 0)
+    if (strcmp(command, "RSA ") != 0) {
+        close(conn_fd);
         return ERR_UNKNOWN_ANSWER;
+    }
 
     char status[4] = {0};
     if (read_tcp_stream(status, 3, conn_fd) != 0) {
@@ -436,9 +441,10 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
     }
 
     if (strcmp(status, "OK ") != 0) {
-        if (!is_lf_in_stream(conn_fd))
-            return close(conn_fd), ERR_UNKNOWN_ANSWER;
-
+        if (!is_lf_in_stream(conn_fd)) {
+            close(conn_fd);
+            return ERR_UNKNOWN_ANSWER;
+        }
         close(conn_fd);
         return determine_close_response_error(status, response);
     }
