@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "../utils/logging.h"
+#include "../utils/constants.h"
 
 #include "command_table.h"
 #include "handlers.h"
@@ -36,11 +37,11 @@ struct command_mappings command_table[] = {
     {"mb", handle_my_bids},
     {"list", handle_list},
     {"l", handle_list},
-    {"show_asset", handle_show_asset},
+    {"showasset", handle_show_asset},
     {"sa", handle_show_asset},
     {"bid", handle_bid},
     {"b", handle_bid},
-    {"show_record", handle_show_record},
+    {"showrecord", handle_show_record},
     {"sr", handle_show_record},
     {"clear", handle_clear},
     {"help", handle_help},
@@ -72,7 +73,7 @@ struct error_mappings error_lookup_table[] = {
     {ERR_TCP_CONN_TO_SERVER, "Failed establishing a connection to the server\n"},
     {ERR_TIMEOUT_TCP, "Timed out waiting for server TCP response\n"},
     {ERR_RECEIVING_TCP, "Failed reading TCP response from TCP server\n"},
-    {ERR_REQUESTING_TCP, "Failed sending TCP request to server\n"},
+    {ERR_SENDING_TCP, "Failed sending TCP request to server\n"},
     {ERR_NOT_LOGGED_IN, "Must be logged in to perform this operation\n"},
     {ERR_ALREADY_LOGGED_IN, "A user is already logged in\n"},
     {ERR_NOT_LOGGED_OUT, "Please logout before performing this operation\n"},
@@ -81,6 +82,8 @@ struct error_mappings error_lookup_table[] = {
     {ERR_CREAT_ASSET_FILE, "Couldn't create asset file\n"},
     {ERR_WRITE_ASSET_FILE, "Failed writting contents to asset file\n"},
     {ERR_READ_ASSET_FILE, "Failed reading contents from asset file\n"},
+    {ERR_INVALID_BID_VAL, "Invalid bid value, must be a number with up to 6 digits\n"},
+    {ERR_TCP_CLOSED_CONN, "Server closed the connection\n"}
 };
 
 static 
@@ -91,10 +94,12 @@ static
 const 
 int command_table_entries = sizeof(command_table) / sizeof(struct command_mappings);
 
+/**
+* Get error message for errcode
+*/
 char *get_error_msg(int errcode) {
-
     if (errcode < 0 || errcode > error_lookup_entries) {
-        LOG_ERROR("Don't provide errcode which are not returned");
+        LOG_ERROR("Couldn't lookup error code %d", errcode);
         return NULL;
     }
 
@@ -102,7 +107,7 @@ char *get_error_msg(int errcode) {
 }
 
 /**
-Get function handler for command
+* Get function handler for command
 */
 handler_func get_handler_func(char *cmd) {
     for (int i = 0; i < command_table_entries; ++i) {

@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <sys/stat.h>
 
+#include "../utils/constants.h"
 #include "../utils/config.h"
 #include "../utils/logging.h"
 #include "../utils/validators.h"
@@ -351,12 +352,11 @@ int get_auction_info(char *aid, char *buff, int n) {
 }
 
 int get_user_auctions(char *uid, char *buff) {
-    char user_hosted_path[32];
-    sprintf(user_hosted_path, "USERS/%.6s/HOSTED", uid);
-
     lock_db_mutex(uid);
 
     struct dirent **entries;
+    char user_hosted_path[32];
+    sprintf(user_hosted_path, "USERS/%.6s/HOSTED", uid);
     int n_entries = scandir(user_hosted_path, &entries, NULL, alphasort);
     if (n_entries < 0) {
         LOG_DEBUG("[DB] Failed retrieving user auctions");

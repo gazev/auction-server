@@ -13,6 +13,7 @@
 #include "../utils/logging.h"
 #include "../utils/validators.h"
 #include "../utils/utils.h"
+#include "../utils/constants.h"
 
 #include "client.h"
 #include "command_table.h"
@@ -126,8 +127,10 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
     if (send_tcp_message(auction_info, strlen(auction_info), conn_fd) != 0) {
         close (asset_fd);
         close(conn_fd);
-        LOG_DEBUG("Failed sending asset meta info");
-        return ERR_REQUESTING_TCP;
+        if (errno == EPIPE)
+            return ERR_TCP_CLOSED_CONN;
+
+        return ERR_SENDING_TCP;
     }
 
     int err = as_send_asset_file(asset_fd, conn_fd, st.st_size);
@@ -135,14 +138,12 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
         close(asset_fd);
         close(conn_fd);
         if (errno == EPIPE)
-        LOG_DEBUG("Connection closed");
-            return ERR_REQUESTING_TCP;
-
-        if (err == ERR_TCP_WRITE)
-            return ERR_REQUESTING_TCP;
+            return ERR_TCP_CLOSED_CONN;
 
         if (err == ERR_READ_AF)
             return ERR_READ_ASSET_FILE;
+
+        return ERR_SENDING_TCP;
     }
 
     close(asset_fd);
@@ -154,11 +155,18 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
     */
     // read the response command
     char command[8] = {0}; // enough to fit valid responses
-    if (read_tcp_stream(command, 4, conn_fd)) {
+    err = read_tcp_stream(command, 4, conn_fd);
+    if (err) {
         close(conn_fd);
+        // if we timed out reading from stream
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
 
+        // if client closed the connection
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
+
+        // other error
         return ERR_RECEIVING_TCP;
     }
 
@@ -170,10 +178,14 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
 
     // get ROA response status
     char status[4] = {0};
-    if (read_tcp_stream(status, 3, conn_fd) != 0) {
+    err = read_tcp_stream(status, 3, conn_fd);
+    if (err) {
         close(conn_fd);
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
 
         return ERR_RECEIVING_TCP;
     }
@@ -190,10 +202,14 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
 
     // read AID
     char aid_buff[4] = {0};
-    if (read_tcp_stream(aid_buff, 3, conn_fd)) {
+    err = read_tcp_stream(aid_buff, 3, conn_fd);
+    if (err) {
         close(conn_fd);
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
 
         return ERR_RECEIVING_TCP;
     }
@@ -291,7 +307,10 @@ int handle_close (char *input, struct client_state *client, char response[MAX_SE
     sprintf(request, "CLS %.6s %.8s %.3s\n", client->uid, client->passwd, aid);
     if (send_tcp_message(request, strlen(request), conn_fd) != 0) {
         close(conn_fd);
-        return ERR_REQUESTING_TCP;
+        if (errno == EPIPE)
+            return ERR_TCP_CLOSED_CONN;
+
+        return ERR_SENDING_TCP;
     }
 
     /**
@@ -302,11 +321,15 @@ int handle_close (char *input, struct client_state *client, char response[MAX_SE
 
     // read the response command
     char command[8] = {0};
-    if (read_tcp_stream(command, 4, conn_fd) != 0) {
+    int err = read_tcp_stream(command, 4, conn_fd);
+    if (err) {
         close(conn_fd);
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
-        }
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
+
         return ERR_RECEIVING_TCP;
     }
 
@@ -318,11 +341,15 @@ int handle_close (char *input, struct client_state *client, char response[MAX_SE
 
     // get RCL command status
     char status[4] = {0};
-    if (read_tcp_stream(status, 3, conn_fd) != 0) {
+    err = read_tcp_stream(status, 3, conn_fd) != 0;
+    if (err) {
         close(conn_fd);
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
-        }
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
+
         return ERR_RECEIVING_TCP;
     }
 
@@ -333,6 +360,7 @@ int handle_close (char *input, struct client_state *client, char response[MAX_SE
             close(conn_fd);
             return ERR_UNKNOWN_ANSWER;
         }
+
         close(conn_fd);
         return determine_close_response_error(status, response);
     }
@@ -410,7 +438,10 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
     sprintf(request, "SAS %.3s\n", aid);
     if (send_tcp_message(request, strlen(request), conn_fd) != 0) {
         close(conn_fd);
-        return ERR_REQUESTING_TCP;
+        if (errno == EPIPE)
+            return ERR_TCP_CLOSED_CONN;
+
+        return ERR_SENDING_TCP;
     }
 
     /**
@@ -418,11 +449,15 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
     * Format: RSA status [Fname Fsize Fdata]
     */
     char command[8] = {0};
-    if (read_tcp_stream(command, 4, conn_fd) != 0) {
+    int err = read_tcp_stream(command, 4, conn_fd) != 0;
+    if (err) {
         close(conn_fd);
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
-        }
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
+
         return ERR_RECEIVING_TCP;
     }
 
@@ -434,9 +469,12 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
     char status[4] = {0};
     if (read_tcp_stream(status, 3, conn_fd) != 0) {
         close(conn_fd);
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
-        }
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
+
         return ERR_RECEIVING_TCP;
     }
 
@@ -515,12 +553,15 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
         return ERR_CREAT_ASSET_FILE;
     }
 
-    int err = as_recv_asset_file(asset_fd, conn_fd, fsize);
+    err = as_recv_asset_file(asset_fd, conn_fd, fsize);
     if (err) {
         close(asset_fd);
         close(conn_fd);
         if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
 
         if (err == ERR_TCP_READ)
             return ERR_RECEIVING_TCP;
@@ -565,35 +606,25 @@ void rollback_asset_creation(char *fname) {
 */
 int handle_bid (char *input, struct client_state *client, char response[MAX_SERVER_RESPONSE]) {
     LOG_DEBUG("Entered BID");
-
     if (!client->logged_in) {
         return ERR_NOT_LOGGED_IN;
     }
 
-    char *aid = strtok(input, " ");
-    if (aid == NULL) {
-        return ERR_NULL_ARGS;
-    }
+    char *aid, *value;
 
-    if (!is_valid_aid(aid)) {
+    aid = strtok(input, " ");
+    if (aid == NULL)
+        return ERR_NULL_ARGS;
+
+    if (!is_valid_aid(aid))
         return ERR_INVALID_AID;
-    }
 
-    char *value = strtok(NULL, "\n");
-    if (value == NULL) {
+    value = strtok(NULL, "\n");
+    if (value == NULL)
         return ERR_NULL_ARGS;
-    }
 
-    if (!is_valid_start_value(value)){
-        return ERR_INVALID_SV;
-    }
-
-    int bid_value = atoi(value);
-
-    char request[64];
-    sprintf(request, "BID %.6s %.8s %.3s %d\n", client->uid, client->passwd, aid, bid_value);
-
-    LOG_DEBUG("%s", request);
+    if (!is_valid_start_value(value))
+        return ERR_INVALID_BID_VAL;
 
      /**
     * Open connect to server with a 5s timeout socket
@@ -605,21 +636,30 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
     /**
      * send request to server
     */
+    int bid_value = atoi(value);
+    char request[64];
+    sprintf(request, "BID %.6s %.8s %.3s %d\n", client->uid, client->passwd, aid, bid_value);
     if (send_tcp_message(request, strlen(request), conn_fd) != 0) {
         close(conn_fd);
-        return ERR_REQUESTING_TCP;
+        if (errno == EPIPE)
+            return ERR_TCP_CLOSED_CONN;
+
+        return ERR_SENDING_TCP;
     }
 
     /**
-     * receive server answer
+     * Read and validate response from server 
     */
-    // read the response command
     char command[8] = {0};
-    if (read_tcp_stream(command, 4, conn_fd) != 0) {
+    int err = read_tcp_stream(command, 4, conn_fd);
+    if (err) {
         close(conn_fd);
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
-        }
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
+
         return ERR_RECEIVING_TCP;
     }
 
@@ -630,12 +670,16 @@ int handle_bid (char *input, struct client_state *client, char response[MAX_SERV
     }
 
     // get RBD command status
-    char status[5] = {0};
-    if (read_tcp_stream(status, 4, conn_fd) != 0) {
+    char status[8] = {0};
+    err = read_tcp_stream(status, 4, conn_fd);
+    if (err) {
         close(conn_fd);
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return ERR_TIMEOUT_TCP;
-        }
+
+        if (err == ERR_TCP_READ_CLOSED)
+            return ERR_TCP_CLOSED_CONN;
+
         return ERR_RECEIVING_TCP;
     }
 

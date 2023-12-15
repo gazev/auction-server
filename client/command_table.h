@@ -1,6 +1,8 @@
 #ifndef __COMMAND_TABLE_H__
 #define __COMMAND_TABLE_H__
 
+#include "../utils/constants.h"
+
 #include "client.h"
 
 #define ERR_TIMEDOUT_UDP 1
@@ -22,7 +24,7 @@
 #define ERR_TCP_CONN_TO_SERVER 15
 #define ERR_TIMEOUT_TCP 16 
 #define ERR_RECEIVING_TCP 17 
-#define ERR_REQUESTING_TCP 18 
+#define ERR_SENDING_TCP 18 
 
 #define ERR_NOT_LOGGED_IN 19
 #define ERR_ALREADY_LOGGED_IN 20
@@ -33,6 +35,10 @@
 #define ERR_CREAT_ASSET_FILE 24
 #define ERR_WRITE_ASSET_FILE 25
 #define ERR_READ_ASSET_FILE 26
+
+#define ERR_INVALID_BID_VAL 27
+
+#define ERR_TCP_CLOSED_CONN 28
 
 typedef int (*handler_func)(char *, struct client_state *, char *);
 

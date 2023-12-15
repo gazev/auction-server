@@ -3,6 +3,7 @@
 
 #include "../utils/logging.h"
 #include "../utils/config.h"
+#include "../utils/constants.h"
 
 #include "tcp.h"
 #include "tcp_command_table.h"

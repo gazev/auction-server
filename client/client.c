@@ -9,6 +9,7 @@
 
 #include "../utils/config.h"
 #include "../utils/logging.h"
+#include "../utils/constants.h"
 
 #include "client.h"
 #include "handlers.h"
@@ -29,7 +30,7 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
 
     int err = getaddrinfo(ip, port, &hints, &req);
     if (err) {
-        LOG_DEBUG("Failed getting adress IP");
+        LOG_ERROR("Failed DNS lookup");
         if (err == EAI_SYSTEM) {
             LOG_ERROR("getaddrinfo: %s", strerror(errno));
         } else {
@@ -38,7 +39,14 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
         return -1;
     }
 
+    // not sure how this could happen, but we safe guard it here
+    if (req->ai_addr == NULL) {
+        LOG_ERROR("Failed DNS lookup")
+        return -1;
+    }
+
     if ((sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        LOG_ERROR("Failed setting up client UDP socket");
         LOG_ERROR("socket: %s", strerror(errno));
         return -1;
     }
@@ -67,12 +75,12 @@ void run_client(char *ip, char *port) {
     struct client_state client;
 
     if (initialize_client(ip, port, &client) != 0) {
-        LOG_DEBUG("Failed initializing client");
+        LOG_ERROR("Failed initializing client");
         exit(1);
     }
 
     if (signal(SIGPIPE, SIG_IGN) != 0) {
-        LOG_DEBUG("Failed overwritteng default SIGPIPE handler");
+        LOG_ERROR("Failed overwriting default SIGPIPE handler");
         LOG_ERROR("signal: %s", strerror(errno));
     }
 

@@ -4,13 +4,13 @@
 #include "server.h"
 #include "udp.h"
 
-#define ERR_LIN_BAD_VALUES 1
-#define ERR_LOU_BAD_VALUES 2
-#define ERR_UNR_BAD_VALUES 3 
-#define ERR_LMA_BAD_VALUES 4
-#define ERR_MY_BIDS_BAD_UID 5
-#define ERR_SRC_BAD_VALUES 6
-#define ERR_LST_BAD_VALUES 7
+#define ERR_LIN 1
+#define ERR_LOU 2
+#define ERR_UNR 3 
+#define ERR_LMA 4
+#define ERR_MB 5
+#define ERR_SRC 6
+#define ERR_LST 7
 
 typedef int (*udp_handler_fn)(char *req, struct udp_client *client, char *resp, size_t *resp_len);
 udp_handler_fn get_udp_handler_fn(char *cmd);

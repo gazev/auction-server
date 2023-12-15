@@ -53,7 +53,7 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
 
         if (read == 0) {
             LOG_VERBOSE("Connection was closed");
-            return ERR_TCP_READ;
+            return ERR_TCP_READ_CLOSED;
         }
 
         total_read += read;

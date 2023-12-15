@@ -13,6 +13,7 @@
 #include <pthread.h>
 
 #include "../utils/logging.h"
+#include "../utils/config.h"
 
 #include "server.h"
 #include "tasks_queue.h"
@@ -254,7 +255,7 @@ void server(char *port) {
     */
     thread_t udp_thread;
     thread_t tcp_thread;
-    thread_t worker_threads[THREAD_POOL_SIZE];
+    thread_t worker_threads[THREAD_POOL_SZ];
 
     tasks_queue *tasks_q; // producer consumer queue
     //  producer consumer queue
@@ -264,7 +265,7 @@ void server(char *port) {
     }
 
     // launch tcp workers thread pool
-    for (int i = 0; i < THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < THREAD_POOL_SZ; i++) {
         worker_threads[i].thread_nr = i;
         worker_threads[i].args = tasks_q;
         if (pthread_create(&worker_threads[i].tid, NULL, tcp_worker_thread_fn, (void *)&worker_threads[i]) != 0) {
@@ -305,7 +306,7 @@ void server(char *port) {
         exit(1);
     }
 
-    for (int i = 0; i < THREAD_POOL_SIZE; i++) {
+    for (int i = 0; i < THREAD_POOL_SZ; i++) {
         if (pthread_join(worker_threads[i].tid, NULL) != 0) {
             LOG_ERROR("Failed joining worker threads");
             exit(1);

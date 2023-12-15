@@ -18,8 +18,8 @@
 #include "client.h"
 
 /**
-Handles command passed as argument.
-Returns 0 if command is successfully executed and -1 if an error occurs
+* Handles command passed as argument.
+* Returns 0 if command is successfully executed and -1 if an error occurs
 */
 int handle_cmd(char *user_input, struct client_state *client, char *response) {
     char *cmd = strtok(user_input, " "); 
@@ -29,15 +29,14 @@ int handle_cmd(char *user_input, struct client_state *client, char *response) {
         return ERR_NO_COMMAND;
     }
 
-    handler_func fn = get_handler_func(cmd);
+    handler_func handler = get_handler_func(cmd);
 
-    if (fn == NULL) {
-        sprintf(response, "Unknown command %s", cmd);
+    // no handler for this command    
+    if (handler == NULL) {
         return ERR_INVALID_COMMAND;
     }
-    
 
-    return fn(user_input + strlen(cmd) + 1, client, response);
+    return handler(user_input + strlen(cmd) + 1, client, response);
 }
 
 int handle_help(char *input, struct client_state *c, char *response) {
@@ -95,6 +94,7 @@ int handle_format(char *input, struct client_state *c, char *response) {
         "  Bids History Format:\n"
         "  |{Bidder UID - Bid Value - Bid Date - Bid Sec Time}| (Up to 2 per line)\n";
 
-    strcpy(response, msg_format);
+    sprintf(response, "%s", msg_format);
+
     return 0;
 }

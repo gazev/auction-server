@@ -15,8 +15,9 @@
 #include "../utils/validators.h"
 
 #include "client.h"
+
 /**
-Print program's help message
+* Print program's help message
 */
 void print_usage() {
     char *usage_fmt =  
@@ -39,7 +40,7 @@ int main(int argc, char **argv) {
     char *ip   = NULL;
 
     // parse input arguments with getopt()
-    int opt = 0; 
+    int opt; 
     while ((opt = getopt(argc, argv, "hdn:p:")) != -1) { 
         switch (opt) {
             case 'h':
@@ -47,9 +48,8 @@ int main(int argc, char **argv) {
                 exit(0);
 
             case 'n':
-                if (!is_valid_ip_addr(optarg)) {
+                if (!is_valid_ip_addr(optarg))
                     LOG_WARN("Invalid IP literal (contiuing assuming IP is a domain): %s", optarg);
-                }
                 ip = optarg;
                 break;
             

@@ -31,13 +31,12 @@ struct udp_command_mappings udp_command_table[] = {
 // each error message is indexed by it's errcode, check udp_errors.h to understand better
 static
 char *udp_errors_table[] = {
-    "", // return code 0 is not an error
-    "RLI ERR\n", // login with bad UID or passwd
-    "RLO ERR\n", // logout with bad UID or passwd
-    "RUR ERR\n", // unregister with bad UID or passwd
-    "RMA ERR\n", // my auctions with bad UID or passwd
-    "RMB ERR\n", // my bids with bad UID
-    "RRC ERR\n", // show record with bad AID
+    "RLI ERR\n", 
+    "RLO ERR\n", 
+    "RUR ERR\n", 
+    "RMA ERR\n", 
+    "RMB ERR\n", 
+    "RRC ERR\n", 
 };
 
 static
@@ -65,6 +64,6 @@ char *get_udp_error_msg(int errcode) {
     if (errcode < 0 || errcode >= udp_error_table_entries)
         return NULL;
 
-    return udp_errors_table[errcode];
+    return udp_errors_table[errcode - 1];
 }
 
