@@ -10,7 +10,7 @@
 #include "tasks_queue.h"
 
 struct tasks_queue {
-    task_t tasks[THREAD_POOL_SZ]; // this might be good enough since the workload is not too heavy 
+    task_t tasks[THREAD_POOL_SZ * 2]; // this might be good enough since the workload is not too heavy 
     size_t size;
     int head;
     int tail;

@@ -185,8 +185,8 @@ void *tcp_server_thread_fn(void *thread_v) {
         memset(&client_addr, 0, sizeof(client_addr));
 
         if ((conn_fd = accept(server_sock, (struct sockaddr*) &client_addr, &client_addr_size)) < 0) {
-            LOG_DEBUG("[TCP] Failed accepting new connection");
-            LOG_ERROR("[TPC] accept: %s", strerror(errno));
+            LOG_ERROR("[TCP] Failed accepting new connection");
+            LOG_DEBUG("[TPC] accept: %s", strerror(errno));
             continue;
         }
 

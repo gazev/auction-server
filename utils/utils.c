@@ -42,17 +42,17 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
         read = recv(conn_fd, buff, BUFF_SZ, 0);
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                LOG_VERBOSE("Timed out receiving response");
-                LOG_DEBUG("recv: %s", strerror(errno));
+                LOG_VERBOSE("[RECV ASSET] Timed out waiting for data");
+                LOG_DEBUG("[RECV ASSET] recv: %s", strerror(errno));
             } else {
-                LOG_VERBOSE("Failed reading from connection socket");
-                LOG_DEBUG("recv: %s", strerror(errno));
+                LOG_VERBOSE("[RECV ASSET] Failed reading from connection socket");
+                LOG_DEBUG("[RECV ASSET] recv: %s", strerror(errno));
             }
             return ERR_TCP_READ;
         }
 
         if (read == 0) {
-            LOG_VERBOSE("Connection was closed");
+            LOG_VERBOSE("[RECV ASSET] Connection was closed");
             return ERR_TCP_READ_CLOSED;
         }
 
@@ -65,8 +65,8 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
         do {
             ssize_t written = write(afd, ptr + written_to_file, read - written_to_file);
             if (written <= 0) {
-                LOG_DEBUG("Failed writting to asset file");
-                LOG_DEBUG("write: %s", strerror(errno));
+                LOG_DEBUG("[RECV ASSET] Failed writting to asset file");
+                LOG_DEBUG("[RECV ASSET] write: %s", strerror(errno));
                 return ERR_WRITE_AF;
             }
             written_to_file += written;
@@ -76,13 +76,13 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
 
     // if more than what was announced was sent it is an error
     if (total_read > fsize + 1) {
-        LOG_DEBUG("%d %d", total_read, fsize);
+        LOG_VERBOSE("[RECV ASSET] Got an invalid protocol message")
         return ERR_INVALID_PROTOCOL;
     }
 
     // check if LF finalizes the message, if it doesn't it is breaking the protocol
     if (buff[read - 1] != '\n') {
-        LOG_DEBUG("%c", buff[read - 1]);
+        LOG_VERBOSE("[RECV ASSET] Got an invalid protocol message")
         return ERR_INVALID_PROTOCOL; 
     }
 
@@ -95,8 +95,8 @@ int as_recv_asset_file(int afd, int conn_fd, int fsize) {
     while (last_block_written < read - 1) {
         ssize_t written = write(afd, ptr + last_block_written, read - last_block_written - 1);
         if (written <= 0) {
-            LOG_DEBUG("Failed writting last block to asset file");
-            LOG_DEBUG("write: %s", strerror(errno));
+            LOG_VERBOSE("[RECV ASSET] Failed writting last block to asset file");
+            LOG_DEBUG("[RECV ASSET] write: %s", strerror(errno));
             return ERR_WRITE_AF;
         }
 
@@ -122,13 +122,13 @@ int as_send_asset_file(int afd, int conn_fd, int fsize) {
     while (total_read < fsize) {
         ssize_t n = read(afd, buff, BUFF_SZ);
         if (n < 0) {
-            LOG_DEBUG("Failed reading from asset file");
-            LOG_DEBUG("read: %s", strerror(errno));
+            LOG_VERBOSE("[SEND ASSET] Failed reading data asset file");
+            LOG_DEBUG("[SEND ASSET] read: %s", strerror(errno));
             return ERR_READ_AF;
         }
 
         if (n == 0) {
-            LOG_DEBUG("Invalid fsize specified");
+            LOG_DEBUG("[SEND ASSET] Invalid fsize specified");
             return ERR_BAD_FSIZE;
         }
         
@@ -140,10 +140,10 @@ int as_send_asset_file(int afd, int conn_fd, int fsize) {
             ssize_t sent = send(conn_fd, ptr + read_sent, n - read_sent, 0);
             if (sent < 0) {
                 if (errno == EPIPE) {
-                    LOG_DEBUG("Connection closed");
+                    LOG_VERBOSE("[SEND ASSET] Connection closed while sending asset data");
                 } else {
-                    LOG_DEBUG("send: %s", strerror(errno));
-                    LOG_DEBUG("Failed sending response");
+                    LOG_VERBOSE("[SEND ASSET] Failed sending asset data");
+                    LOG_DEBUG("[SEND ASSET] send: %s", strerror(errno));
                 }
                 return ERR_TCP_WRITE;
             }
@@ -155,7 +155,7 @@ int as_send_asset_file(int afd, int conn_fd, int fsize) {
     * Send terminating LF
     */
     if (send_tcp_message("\n", 1, conn_fd) != 0) {
-        LOG_DEBUG("Failed sending terminating LF");
+        LOG_VERBOSE("[SEND ASSET] Failed sending terminating LF");
         return ERR_TCP_WRITE;
     }
 
@@ -174,17 +174,17 @@ int read_tcp_stream(char *buff, int n, int conn_fd) {
         ssize_t read = recv(conn_fd, ptr + total_read, n - total_read, 0);
         if (read < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                LOG_ERROR("Timed out receiving response");
+                LOG_DEBUG("Timed out receiving response");
                 LOG_DEBUG("recv: %s", strerror(errno));
             } else {
-                LOG_ERROR("Failed reading from socket");
+                LOG_DEBUG("Failed reading from socket");
                 LOG_DEBUG("recv: %s", strerror(errno));
             }
             return ERR_TCP_READ;
         }
 
         if (read == 0) {
-            LOG_ERROR("Connection closed by client");
+            LOG_DEBUG("Connection closed by client");
             return ERR_TCP_READ_CLOSED;
         }
 

@@ -7,6 +7,7 @@
 
 #include "../utils/logging.h"
 #include "../utils/validators.h"
+#include "../utils/config.h"
 
 #include "command_table.h"
 #include "udp.h"
@@ -138,7 +139,7 @@ int handle_logout (char *input, struct client_state *client, char response[MAX_S
 
     // ERR, the request was invalid, this means the client is broken
     if (strcmp(buffer, "RLO ERR\n") == 0) {
-        strcpy(response, "Server returned an error status\n");
+        strcpy(response, "Server returned an error status for the logout command\n");
         return 0;
     }
 
@@ -206,8 +207,8 @@ int handle_unregister (char *input, struct client_state *client, char response[M
     }
 
     // ERR, the request was invalid, this means the client is broken
-    if (strcmp(buffer, "RLO ERR\n") == 0) {
-        strcpy(response, "Server returned an error status\n");
+    if (strcmp(buffer, "RUR ERR\n") == 0) {
+        strcpy(response, "Server returned an error status for the unregister command\n");
         return 0;
     }
 
@@ -303,7 +304,7 @@ int handle_list (char *input, struct client_state *client, char response[MAX_SER
 
     // ERR, the request was invalid, this means the client is broken
     if (strcmp(payload, "ERR") == 0) {
-        strcpy(response, "Server returned an error status\n");
+        strcpy(response, "Server returned an error status for the LST command\n");
         return 0;
     }
 
@@ -427,7 +428,7 @@ int handle_my_auctions (char *input, struct client_state *client, char response[
 
     // ERR, the request was invalid, this means the client is broken
     if (strcmp(payload, "ERR") == 0) {
-        strcpy(response, "Server returned an error status\n");
+        strcpy(response, "Server returned an error status for the myauctions command\n");
         return 0;
     }
 
@@ -563,7 +564,7 @@ int handle_show_record (char *input, struct client_state *client, char response[
 
     // ERR status response
     if (strcmp(payload, "ERR") == 0) {
-        strcpy(response, "Got an error response from server\n");
+        strcpy(response, "Server returned an error status for the showrecord command\n");
         return 0;
     }
 
@@ -801,7 +802,7 @@ int handle_my_bids (char *input, struct client_state *client, char response[MAX_
 
     // ERR, the request was invalid, this means the client is broken
     if (strcmp(payload, "ERR") == 0) {
-        strcpy(response, "Server returned an error status\n");
+        strcpy(response, "Server returned an error status for the mybids command\n");
         return 0;
     }
 
@@ -894,7 +895,7 @@ is LF terminated, it it isn't it will return UDP_ERR_NO_LF_MESSAGE.
 int receive_udp_response(char *buffer, size_t response_size, struct client_state *client) {
     //set timeout to socket
     struct timeval timeout;
-    timeout.tv_sec = 5;  // Timeout in seconds
+    timeout.tv_sec = UDP_CLIENT_TIMEOUT;  // Timeout in seconds
     timeout.tv_usec = 0; // Additional microseconds
     if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         LOG_DEBUG("Failed setting timeout for UDP response socket")
@@ -911,6 +912,11 @@ int receive_udp_response(char *buffer, size_t response_size, struct client_state
             LOG_DEBUG("Failed reading from UDP socket");
             LOG_DEBUG("recvfrom: %s", strerror(errno));
         }
+        return 1;
+    }
+
+    if (n == 0) {
+        LOG_DEBUG("Empty message");
         return 1;
     }
 

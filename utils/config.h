@@ -8,7 +8,7 @@
 */
 #define DB_ROOT "ASDIR" // database root directory name
 
-#define THREAD_POOL_SZ 100 // number of TCP worker threads (also max number of TCP connections allowed)
+#define THREAD_POOL_SZ 30 // number of TCP worker threads (also max number of TCP connections allowed)
 
 #define TCP_SERV_TIMEOUT 5 // in seconds
 #define UDP_SERV_TIMEOUT 5  // in seconds

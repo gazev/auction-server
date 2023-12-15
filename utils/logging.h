@@ -28,12 +28,11 @@ extern log_level_t g_level;
     } while (0);
 
 
-#define LOG_ERROR(...)                                                         \
-    do {                                                                       \
-        char buf[2048];                                                    \
-        snprintf(buf, 2048, __VA_ARGS__);                                  \
-        fprintf(stdout, "[DEBUG]: %s:%d :: %s :: %s\n", __FILE__,          \
-                __LINE__, __func__, buf);                                  \
+#define LOG_ERROR(...)                                    \
+    do {                                                  \
+        char buf[2048];                                   \
+        snprintf(buf, 2048, __VA_ARGS__);                 \
+        fprintf(stdout, "[ERROR]: %s\n", buf);            \
     } while (0);
 
 

@@ -108,7 +108,7 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
     * Handler will proccedd with the protocol communication if the command payload 
     * is well behaved, if not it will return an error code to be communicated to the client 
     */
-    LOG_VERBOSE("%s:%d - [TCP] Handling %s command", client->ipv4, client->port, cmd);
+    LOG_VERBOSE("%s:%d - [TCP] Handling %scommand", client->ipv4, client->port, cmd);
     int handler_ret = handler_fn(client);
     if (handler_ret != 0) {
         LOG_VERBOSE("%s:%d - [TPC] Badly formatted command", client->ipv4, client->port);
@@ -155,7 +155,6 @@ int handle_open(struct tcp_client *client) {
 
     // no delimiters after OPA and password
     if (buff[UID_SIZE + PASSWORD_SIZE + 1] != ' ') {
-        LOG_VERBOSE("%s:%d - [OPA] Badly formatted command", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
@@ -170,15 +169,16 @@ int handle_open(struct tcp_client *client) {
     }
 
     passwd = strtok(NULL, " ");
+    if (passwd == NULL) {
+        LOG_VERBOSE("%s:%d - [OPA] No password", client->ipv4, client->port);
+        return OPA_BAD_ARGS;
+    }
+
     if (!is_valid_passwd(passwd)) {
         LOG_VERBOSE("%s:%d - [OPA] Invalid password", client->ipv4, client->port);
         return OPA_BAD_ARGS;
     }
 
-    if (passwd == NULL) {
-        LOG_VERBOSE("%s:%d - [OPA] No password", client->ipv4, client->port);
-        return OPA_BAD_ARGS;
-    }
 
     /**
     * We will read byte by byte because it is not trivial how to read variable sized

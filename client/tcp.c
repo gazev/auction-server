@@ -14,6 +14,7 @@
 #include "../utils/validators.h"
 #include "../utils/utils.h"
 #include "../utils/constants.h"
+#include "../utils/config.h"
 
 #include "client.h"
 #include "command_table.h"
@@ -60,7 +61,6 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
 
     // validate asset file name
     asset_fname = strtok(NULL, " ");
-    LOG_DEBUG("%s", asset_fname);
     if (asset_fname == NULL)
         return ERR_NULL_ARGS;
 
@@ -247,7 +247,7 @@ int handle_open (char *input, struct client_state *client, char response[MAX_SER
 */
 int determine_open_response_error(char *status, char *response) {
     if (!strcmp(status, "ERR")) {
-        strcpy(response, "Received an error message for open command from the server\n");
+        strcpy(response, "Received an error message for the open command from the server\n");
         return 0;
     }
 
@@ -741,7 +741,7 @@ int open_tcp_connection_to_server(struct client_state *client) {
     }
 
     struct timeval timeout;
-    timeout.tv_sec = 5; // 5 sec timeout
+    timeout.tv_sec = TCP_CLIENT_TIMEOUT; // 5 sec timeout
     timeout.tv_usec = 0;
     // set timeout for socket
     if (setsockopt(conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
