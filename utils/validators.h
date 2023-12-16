@@ -1,3 +1,6 @@
+#ifndef __VALIDATORS_H__
+#define __VALIDATORS_H__
+
 int is_valid_port(char *);
 int is_valid_ip_addr(char *);
 
@@ -13,3 +16,5 @@ int is_valid_fname(char *);
 int is_valid_fsize(char *);
 
 int is_valid_date_time(char *date, char *time);
+
+#endif
