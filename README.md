@@ -6,7 +6,7 @@ To compile each individually do `make server` or `make client` respectively
 # Usage
 ```
 $ ./AS -h
-usage: ./AS [-h] [-v] [-p ASport] [-o log_file]
+usage: ./AS [-h] [-v] [-d] [-p ASport] [-o log_file]
 
 options:
   -h,          show this message and exit
@@ -18,10 +18,11 @@ options:
 
 ```
 $ ./user -h
-usage: ./user [-h] [-n ASIP] [-p ASport]
+usage: ./user [-h] [-d] [-n ASIP] [-p ASport]
 
 options:
   -h,        show this message and exit
+  -d,        set log level to debug
   -n ASIP,   IP of AS server
   -p ASPORT, port where the server will be listening on (default: 58078)
 ```
@@ -70,3 +71,5 @@ Server:
 - [X] - showasset
 - [X] - bid
 
+# Notes
+There are many weird things in the code like, random empty lines that differ from the normal style of the rest of the code, comments that seem to be misplaced/forgotten, inconsistent /** */ usage, interchangeable and inconsistant use of LOG_DEBUG and LOG_ERROR, etc. It's 6k lines of code, we are tired :(
