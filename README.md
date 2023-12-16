@@ -39,7 +39,6 @@ The AS uses one thread for accepting TCP connections, 30 worker threads to serve
 
 
 # Task list
-X - Done, + - Needs revision
 Client:
 - [X] - login
 - [X] - logout 
