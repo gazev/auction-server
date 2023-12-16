@@ -211,13 +211,13 @@ int update_database() {
             continue;
         }
 
-        long end_sec_time = start_time_l + time_active_i;
         if (close(close_fd) != 0) {
             LOG_DEBUG("[DB] Failed closing file descriptor, resources might be leaking");
             LOG_DEBUG("[DB] close: %s", strerror(errno));
         }
 
         // get datetime to put in END file
+        long end_sec_time = start_time_l + time_active_i;
         struct tm *tm_time;
         if ((tm_time = gmtime(&end_sec_time)) == NULL) {
             LOG_DEBUG("[DB] Couldn't get current time information")
@@ -226,7 +226,6 @@ int update_database() {
         }
 
         char time_str[128];
-
         sprintf(time_str, "%4d-%02d-%02d %02d:%02d:%02d", 
                     tm_time->tm_year + 1900, tm_time->tm_mon + 1, tm_time->tm_mday,
                     tm_time->tm_hour, tm_time->tm_min, tm_time->tm_sec);

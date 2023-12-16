@@ -28,20 +28,13 @@ int handle_udp_command(char *request, struct udp_client *client, char *response,
     char cmd[5] = {0};
     strncpy(cmd, request, 4);
 
-    // if (strlen(cmd) != 4) {
-    //     LOG_DEBUG("%s:%d - [UDP] Not enough characters for command token", client->ipv4, client->port);
-    //     LOG_VERBOSE("%s:%d - [UDP] Invalid command, ignoring", client->ipv4, client->port);
-    //     return -1;
-    // }
-
     udp_handler_fn fn = get_udp_handler_fn(cmd);
-
     if (fn == NULL) {
         LOG_VERBOSE("%s:%d - [UDP] Unknown command, ignoring", client->ipv4, client->port);
         return -1;
     }
 
-    LOG_VERBOSE("%s:%d - [UDP] Handling %s command", client->ipv4, client->port, cmd);
+    LOG_VERBOSE("%s:%d - [UDP] Handling %.3s command", client->ipv4, client->port, cmd);
 
     int err = fn(request + strlen(cmd), client, response, response_len);
     // if the syntax of the request was incorrect or values were missing

@@ -87,6 +87,15 @@ void *udp_server_thread_fn(void *thread_v) {
         /**
         * Perform basic message validation
         */
+        if (read == 0) {
+            LOG_VERBOSE("%s:%d - [UDP] Empty message received", udp_client.ipv4, udp_client.port);
+            if (sendto(udp_sock, "ERR\n", 4, 0, (struct sockaddr *)&client_addr, client_addr_size) < 0) {
+                LOG_DEBUG("[UDP] Failed responding to client...");
+                LOG_ERROR("[UDP] sendto: %s", strerror(errno))
+            }
+            continue;
+        }
+
          // check for messages too long (for the current protocol) 
         if (read > 20) {
             LOG_VERBOSE("%s:%d - [UDP] Ignoring too long message", udp_client.ipv4, udp_client.port);

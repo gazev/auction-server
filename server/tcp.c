@@ -108,7 +108,7 @@ int handle_tcp_command(char *cmd, struct tcp_client *client) {
     * Handler will proccedd with the protocol communication if the command payload 
     * is well behaved, if not it will return an error code to be communicated to the client 
     */
-    LOG_VERBOSE("%s:%d - [TCP] Handling %scommand", client->ipv4, client->port, cmd);
+    LOG_VERBOSE("%s:%d - [TCP] Handling %.3s command", client->ipv4, client->port, cmd);
     int handler_ret = handler_fn(client);
     if (handler_ret != 0) {
         LOG_VERBOSE("%s:%d - [TPC] Badly formatted command", client->ipv4, client->port);
