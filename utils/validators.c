@@ -65,7 +65,7 @@ int is_valid_name_char(char c) {
     return isalnum(c) ||
            // special characters
            c == '-' || c == '@' || 
-           c == '!' || c == '?';
+           c == '!' || c == '?' || c == '_';
 }
 
 /**

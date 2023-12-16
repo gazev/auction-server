@@ -405,7 +405,7 @@ int determine_close_response_error(char *status, char *response) {
 
     // our extension of the protocol  :)
     if (!strcmp(status, "NOK")) {
-        strcpy(response, "Auction could not be started by the AS\n");
+        strcpy(response, "Auction could not be closed by the AS\n");
         return 0;
     }
 
@@ -484,7 +484,7 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
             return ERR_UNKNOWN_ANSWER;
         }
         close(conn_fd);
-        return determine_close_response_error(status, response);
+        return determine_show_asset_response_error(status, response);
     }
 
     /**
@@ -579,6 +579,30 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
 }
 
 
+/**
+* Analyses a not OK response sent by the server to the CLS command.
+* If it's a valid response returns 0 and writes corresponding result to `response`.
+* If the message is invalid returns an ERR_UNKNOWN_MESSAGE error code.
+*/
+int determine_show_asset_response_error(char *status, char *response) {
+    if (!strcmp(status, "ERR")) {
+        strcpy(response, "Received an error message for the show asset command from the server\n");
+        return 0;
+    }
+
+    // our extension of the protocol  :)
+    if (!strcmp(status, "NOK")) {
+        strcpy(response, "AS could not deliver asset\n");
+        return 0;
+    }
+
+    return ERR_UNKNOWN_ANSWER;
+}
+
+
+/**
+* Get argument length for argno of protocol SAS command
+*/
 int get_show_asset_arg_len(int argno) {
     if (argno == 0)
         return FNAME_LEN;
