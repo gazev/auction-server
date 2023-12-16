@@ -574,7 +574,7 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
     }
 
     close(conn_fd);
-    sprintf(response, "Successfully retrieved asset %s of auction %.3s\n", fname, aid);
+    sprintf(response, "Successfully retrieved auction %.3s asset %s of size %d.", aid, fname, fsize);
     return 0;
 }
 
