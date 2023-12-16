@@ -41,32 +41,32 @@ The AS uses one thread for accepting TCP connections, 30 worker threads to serve
 # Task list
 X - Done, + - Needs revision
 Client:
-[X] - login
-[X] - logout 
-[X] - unregister 
-[X] - exit
-[X] - list 
-[X] - myauctions 
-[X] - mybids
-[X] - showrecord
+- [X] - login
+- [X] - logout 
+- [X] - unregister 
+- [X] - exit
+- [X] - list 
+- [X] - myauctions 
+- [X] - mybids
+- [X] - showrecord
 
-[X] - open
-[X] - close
-[X] - showasset
-[X] - bid
+- [X] - open
+- [X] - close
+- [X] - showasset
+- [X] - bid
 
 Server:
-[X] - login
-[X] - logout 
-[X] - unregister 
-[X] - exit
-[X] - list 
-[X] - myauctions 
-[X] - mybids
-[X] - showrecord
+- [X] - login
+- [X] - logout 
+- [X] - unregister 
+- [X] - exit
+- [X] - list 
+- [X] - myauctions 
+- [X] - mybids
+- [X] - showrecord
 
-[X] - open
-[X] - close
-[X] - showasset
-[X] - bid
+- [X] - open
+- [X] - close
+- [X] - showasset
+- [X] - bid
 
