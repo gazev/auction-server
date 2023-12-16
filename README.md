@@ -71,3 +71,5 @@ Server:
 - [X] - showasset
 - [X] - bid
 
+# Notes
+There are many weird things in the code like, random empty lines that differ from the normal style of the rest of the code, comments that seem to be misplaced/forgotten, inconsistent /** */ usage, etc.
