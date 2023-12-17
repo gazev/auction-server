@@ -29,6 +29,7 @@ struct command_mappings command_table[] = {
     {"unregister", handle_unregister},
     {"exit", handle_exit},
     {"q", handle_exit},
+    {"quit", handle_exit},
     {"open", handle_open},
     {"close", handle_close},
     {"myauctions", handle_my_auctions},
@@ -46,6 +47,7 @@ struct command_mappings command_table[] = {
     {"clear", handle_clear},
     {"help", handle_help},
     {"h", handle_help},
+    {"?", handle_help},
     {"f", handle_format},
     {"format", handle_format},
 };

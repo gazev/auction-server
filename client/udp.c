@@ -893,17 +893,7 @@ is LF terminated, it it isn't it will return UDP_ERR_NO_LF_MESSAGE.
 * If UDP is sucessfully read and obeys the protocol 0 is returned, else, an error code is returned.
 */
 int receive_udp_response(char *buffer, size_t response_size, struct client_state *client) {
-    //set timeout to socket
-    struct timeval timeout;
-    timeout.tv_sec = UDP_CLIENT_TIMEOUT;  // Timeout in seconds
-    timeout.tv_usec = 0; // Additional microseconds
-    if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-        LOG_DEBUG("Failed setting timeout for UDP response socket")
-        LOG_DEBUG("setsockopt: %s", strerror(errno));
-        return 1;
-    }
-
-    // receive response
+   // receive response
     ssize_t n = recvfrom(client->annouce_socket, buffer, response_size, 0, client->as_addr, &client->as_addr_len);
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {

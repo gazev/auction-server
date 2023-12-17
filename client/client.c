@@ -1,3 +1,4 @@
+#include <asm-generic/socket.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <string.h>
@@ -50,6 +51,23 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
         LOG_ERROR("socket: %s", strerror(errno));
         return -1;
     }
+
+    //set timeout to socket
+    struct timeval timeout;
+    timeout.tv_sec = UDP_CLIENT_TIMEOUT;  // Timeout in seconds
+    timeout.tv_usec = 0; // Additional microseconds
+    if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        LOG_DEBUG("Failed setting timeout for UDP response socket")
+        LOG_DEBUG("setsockopt: %s", strerror(errno));
+        return 1;
+    }
+
+    if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+        LOG_DEBUG("Failed setting timeout for UDP response socket")
+        LOG_DEBUG("setsockopt: %s", strerror(errno));
+        return 1;
+    }
+ 
 
     client->logged_in = 0;
     client->annouce_socket = sock_fd;

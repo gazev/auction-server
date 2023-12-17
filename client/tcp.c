@@ -1,4 +1,5 @@
 #include <asm-generic/errno.h>
+#include <asm-generic/socket.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -574,7 +575,7 @@ int handle_show_asset (char *input, struct client_state *client, char response[M
     }
 
     close(conn_fd);
-    sprintf(response, "Successfully retrieved auction %.3s asset %s of size %d.", aid, fname, fsize);
+    sprintf(response, "Successfully retrieved auction %.3s asset %s of size %d\n", aid, fname, fsize);
     return 0;
 }
 
@@ -592,7 +593,7 @@ int determine_show_asset_response_error(char *status, char *response) {
 
     // our extension of the protocol  :)
     if (!strcmp(status, "NOK")) {
-        strcpy(response, "AS could not deliver asset\n");
+        strcpy(response, "AS could not deliver asset (it either doesn't exist or an internal error occurred)\n");
         return 0;
     }
 
@@ -764,16 +765,26 @@ int open_tcp_connection_to_server(struct client_state *client) {
         return -1;
     }
 
+    /**
+    * Set socket timeouts
+    */
     struct timeval timeout;
     timeout.tv_sec = TCP_CLIENT_TIMEOUT; // 5 sec timeout
     timeout.tv_usec = 0;
-    // set timeout for socket
     if (setsockopt(conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
         close(conn_fd);
         LOG_ERROR("Failed setting timeout for server connection");
         LOG_DEBUG("setsockopt: %s", strerror(errno));
         return -1;
     }
+
+    if (setsockopt(conn_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == -1) {
+        close(conn_fd);
+        LOG_ERROR("Failed setting timeout for server connection");
+        LOG_DEBUG("setsockopt: %s", strerror(errno));
+        return -1;
+    }
+
 
     if (connect(conn_fd, client->as_addr, (socklen_t)client->as_addr_len) != 0) {
         close(conn_fd);

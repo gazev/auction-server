@@ -1,4 +1,5 @@
 #include <asm-generic/errno.h>
+#include <asm-generic/socket.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -29,6 +30,13 @@ int serve_tcp_connection(struct tcp_client *client) {
 
     // set timeout for socket
     if (setsockopt(client->conn_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1) {
+        LOG_ERROR("%s:%d - Failed setting time out socket for client", client->ipv4, client->port);
+        LOG_ERROR("setsockopt: %s", strerror(errno));
+        return -1;
+    }
+
+    // set timeout for socket
+    if (setsockopt(client->conn_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) == -1) {
         LOG_ERROR("%s:%d - Failed setting time out socket for client", client->ipv4, client->port);
         LOG_ERROR("setsockopt: %s", strerror(errno));
         return -1;
