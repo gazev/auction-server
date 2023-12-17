@@ -27,6 +27,10 @@ options:
   -p ASPORT, port where the server will be listening on (default: 58078)
 ```
 
+To get a list of all available commands in the client type `h`, `help` or `?`. 
+For a description of some command outputs type `f` or `format`.
+To close a session type `q`, `quit` or `exit`.
+
 # Configuration
 The default configuration described in this section can be tweaked in the `utils/config.h` file.
 
@@ -72,4 +76,4 @@ Server:
 - [X] - bid
 
 # Notes
-There are many weird things in the code like, random empty lines that differ from the normal style of the rest of the code, comments that seem to be misplaced/forgotten, inconsistent /** */ usage, interchangeable and inconsistant use of LOG_DEBUG and LOG_ERROR, etc. It's 6k lines of code, we are tired :(
+There are many weird things in the code like, random empty lines that differ from the normal style of the rest of the code, comments that seem to be misplaced/forgotten, inconsistent /** */ usage, interchangeable and inconsistant use of LOG_DEBUG and LOG_ERROR, etc. It's 6k lines of code, we are tired :l

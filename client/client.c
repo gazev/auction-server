@@ -56,13 +56,13 @@ int initialize_client(char *ip, char *port, struct client_state *client) {
     struct timeval timeout;
     timeout.tv_sec = UDP_CLIENT_TIMEOUT;  // Timeout in seconds
     timeout.tv_usec = 0; // Additional microseconds
-    if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         LOG_DEBUG("Failed setting timeout for UDP response socket")
         LOG_DEBUG("setsockopt: %s", strerror(errno));
         return 1;
     }
 
-    if (setsockopt(client->annouce_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
+    if (setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
         LOG_DEBUG("Failed setting timeout for UDP response socket")
         LOG_DEBUG("setsockopt: %s", strerror(errno));
         return 1;
